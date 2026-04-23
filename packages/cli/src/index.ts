@@ -38,8 +38,10 @@ export function createProgram(): Command {
     .name("struggle")
     .description("Struggle AI CLI")
     .version("0.1.0")
-    .action(() => {
-      process.stdout.write("Struggle AI CLI v0.1.0 — REPL coming soon\n");
+    .action(async () => {
+      // process.stdout.write("Struggle AI CLI v0.1.0 — REPL coming soon\n");
+      const { startRepl } = await import("./repl.js");
+      await startRepl();
     });
 
   const config = program.command("config").description("Manage Struggle AI configuration");
