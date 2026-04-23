@@ -1,0 +1,135 @@
+import { v4 as uuidv4 } from "uuid";
+
+import type { Intent, Mode, SessionState, TrailEntry, TrailEntryType } from "../types.js";
+
+export interface ModeHistoryEntry {
+  mode: Mode;
+  at: string;
+}
+
+export interface MilestoneRecord {
+  id: string;
+  title: string;
+  description: string;
+  completed: boolean;
+  checkpointLabel: string;
+  checkpointAttempts: number;
+}
+
+export interface GuidedRuntimeState {
+  topic: string;
+  questionIndex: number;
+  answers: Array<{ category: string; question: string; answer: string }>;
+  briefPath?: string;
+  briefSummary?: string;
+  milestones: MilestoneRecord[];
+  activeMilestoneIndex: number;
+  pendingProbe?: string;
+  awaiting: "design_answer" | "checkpoint" | "probe" | "idle";
+}
+
+export interface StandardRuntimeState {
+  topic: string;
+  clarificationAsked: boolean;
+  clarificationAnswer?: string;
+  delivered: boolean;
+  awaiting: "clarification" | "checkpoint" | "idle";
+  checkpointAttempts: number;
+}
+
+export interface SocraticRuntimeState {
+  topic: string;
+  subProblems: Array<{
+    id: string;
+    description: string;
+    questions: string[];
+    resolved: boolean;
+    order: number;
+  }>;
+  activeSubProblemIndex: number;
+  questionIndex: number;
+  awaiting: "question" | "checkpoint" | "idle";
+  checkpointAttempts: number;
+}
+
+export interface RuntimeSessionContext {
+  activeIntent?: Intent;
+  modeHistory: ModeHistoryEntry[];
+  guided: GuidedRuntimeState | undefined;
+  standard: StandardRuntimeState | undefined;
+  socratic: SocraticRuntimeState | undefined;
+}
+
+export function now(): string {
+  return new Date().toISOString();
+}
+
+export function createInitialState(projectPath: string): SessionState {
+  const createdAt = now();
+  return {
+    id: uuidv4(),
+    projectPath,
+    mode: "guided",
+    understandingScore: 60,
+    activeMilestone: "Waiting for the first concrete task",
+    activeSubProblem: "Clarify the goal before implementation",
+    sharedFiles: [],
+    createdAt,
+    lastActive: createdAt,
+  };
+}
+
+export function createTrailEntry(type: TrailEntryType, mode: Mode, payload: unknown, intent?: Intent): TrailEntry {
+  return {
+    id: uuidv4(),
+    timestamp: now(),
+    type,
+    mode,
+    payload,
+    ...(intent ? { intent } : {}),
+  };
+}
+
+export function touchState(state: SessionState): void {
+  state.lastActive = now();
+}
+
+export function deriveDisplayState(state: SessionState, runtime: RuntimeSessionContext): void {
+  if (runtime.guided) {
+    const milestone = runtime.guided.milestones[runtime.guided.activeMilestoneIndex];
+    state.activeMilestone = milestone?.title ?? "Design interview";
+    const currentQuestion = runtime.guided.answers[runtime.guided.questionIndex]?.question;
+    state.activeSubProblem =
+      runtime.guided.awaiting === "design_answer"
+        ? currentQuestion ?? "Gathering product constraints"
+        : runtime.guided.awaiting === "checkpoint" || runtime.guided.awaiting === "probe"
+          ? "Explain the milestone back before moving on"
+          : "Guided flow ready for the next milestone";
+    return;
+  }
+
+  if (runtime.standard) {
+    state.activeMilestone = "Standard implementation pass";
+    state.activeSubProblem =
+      runtime.standard.awaiting === "clarification"
+        ? "Collect one clarification before implementation"
+        : runtime.standard.awaiting === "checkpoint"
+          ? "Digest the generated implementation"
+          : "Standard mode waiting for the next task";
+    return;
+  }
+
+  if (runtime.socratic) {
+    const active = runtime.socratic.subProblems[runtime.socratic.activeSubProblemIndex];
+    state.activeMilestone = "Full Socratic decomposition";
+    state.activeSubProblem = active?.description ?? "Break the problem into smaller pieces";
+    return;
+  }
+
+  state.activeMilestone = "Waiting for the next task";
+  state.activeSubProblem = "No active guided step";
+}
+
+export function bumpUnderstanding(state: SessionState, delta: number): void {
+  state.understandingScore = Math.max(0, Math.min(100, state.understandingScore + delta));
+}
