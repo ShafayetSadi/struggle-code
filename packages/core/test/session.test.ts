@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { startSession } from "../src/index.js";
-import { collectChunks, MemoryIO } from "./test-helpers.js";
+import { MemoryIO, collectChunks } from "./test-helpers.js";
 
 describe("session engine", () => {
   it("routes debug prompts without entering the project interview", async () => {
@@ -22,9 +22,7 @@ describe("session engine", () => {
     await collectChunks(
       session.sendMessage("The first user is an author who needs to publish and edit blog posts quickly.")
     );
-    await collectChunks(
-      session.sendMessage("They create a draft, preview it, and publish from a simple dashboard.")
-    );
+    await collectChunks(session.sendMessage("They create a draft, preview it, and publish from a simple dashboard."));
     const thirdTurn = await collectChunks(
       session.sendMessage(
         "We only need posts and tags in storage, auth can stay email-only, and deployment is a single FastAPI service on a small cloud VM."

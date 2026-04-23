@@ -11,10 +11,7 @@ describe("ADR validation", () => {
         "https://example.com/not-allowed",
         "not-a-url",
       ])
-    ).toEqual([
-      "https://react.dev/learn",
-      "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-    ]);
+    ).toEqual(["https://react.dev/learn", "https://developer.mozilla.org/en-US/docs/Web/JavaScript"]);
   });
 
   it("caps concepts and risks and rejects broken shapes", () => {

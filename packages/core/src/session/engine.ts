@@ -1,5 +1,7 @@
 import { basename, join } from "node:path";
 
+import { generateADR } from "../artifacts/adr.js";
+import { renderTrailMarkdown } from "../artifacts/trail.js";
 import { DEFAULT_CONFIGS } from "../config.js";
 import { classifyIntentWithDeps } from "../gate/classifier.js";
 import {
@@ -10,23 +12,21 @@ import {
   getCurrentDesignQuestion,
   shouldFinishInterview,
 } from "../guided/flow.js";
-import { createLLMAdapter, type LLMAdapter } from "../llm/adapter.js";
+import type { Session } from "../index.js";
+import { type LLMAdapter, createLLMAdapter } from "../llm/adapter.js";
 import { collectStream, safeComplete } from "../llm/runtime.js";
 import { loadPrompt } from "../prompts/loader.js";
 import { buildMinimalCodeChunk, createSocraticState } from "../socratic/flow.js";
 import { buildStandardCodeChunk, createStandardState, needsClarification } from "../standard/flow.js";
-import type { Session } from "../index.js";
 import type { ADR, IO, Intent, Mode, ProviderConfig, ResponseChunk, TrailEntry } from "../types.js";
-import { generateADR } from "../artifacts/adr.js";
-import { renderTrailMarkdown } from "../artifacts/trail.js";
 import {
+  type RuntimeSessionContext,
   bumpUnderstanding,
   createInitialState,
   createTrailEntry,
   deriveDisplayState,
   now,
   touchState,
-  type RuntimeSessionContext,
 } from "./state.js";
 
 function inferTopic(message: string): string {
@@ -34,8 +34,7 @@ function inferTopic(message: string): string {
 }
 
 function summarizeDesignAnswers(topic: string, answers: string[]): string {
-  return `Build ${topic} around a narrow first release focused on ${answers[0] ?? "a single user outcome"}, ` +
-    `with a clear workflow, explicit data boundaries, and runtime constraints captured before coding starts.`;
+  return `Build ${topic} around a narrow first release focused on ${answers[0] ?? "a single user outcome"}, with a clear workflow, explicit data boundaries, and runtime constraints captured before coding starts.`;
 }
 
 function createPromptedTextChunk(text: string): ResponseChunk {
@@ -53,15 +52,12 @@ function looksLikeMetaQuestion(message: string): boolean {
 function messageShowsUnderstanding(message: string): boolean {
   const normalized = message.trim().toLowerCase();
   const wordCount = normalized.split(/\s+/).filter(Boolean).length;
-  return wordCount >= 8 && /(because|so that|flow|user|data|boundary|state|test|persist|request|response)/.test(normalized);
+  return (
+    wordCount >= 8 && /(because|so that|flow|user|data|boundary|state|test|persist|request|response)/.test(normalized)
+  );
 }
 
-async function gradeCheckpoint(
-  llm: LLMAdapter,
-  io: IO,
-  answer: string,
-  summary: string
-): Promise<"pass" | "probe"> {
+async function gradeCheckpoint(llm: LLMAdapter, io: IO, answer: string, summary: string): Promise<"pass" | "probe"> {
   const prompt = await loadPrompt("comprehension-check.md", io);
   const fallback = messageShowsUnderstanding(answer) ? "pass" : "probe";
   const raw = await safeComplete(
@@ -574,7 +570,9 @@ export async function createSessionEngine(projectPath: string, io: IO, config?: 
 
     runtime.socratic = undefined;
     deriveDisplayState(state, runtime);
-    const chunks: ResponseChunk[] = [createPromptedTextChunk("Full Socratic mode finished the decomposition for this task.")];
+    const chunks: ResponseChunk[] = [
+      createPromptedTextChunk("Full Socratic mode finished the decomposition for this task."),
+    ];
     recordChunks(chunks, "project");
     return chunks;
   }

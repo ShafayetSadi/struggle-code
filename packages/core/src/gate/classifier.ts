@@ -12,15 +12,11 @@ export interface ClassifierDeps {
 
 export function fallbackIntentHeuristic(message: string): Intent {
   const lower = message.toLowerCase();
-  if (
-    /error|bug|debug|why does|doesn't work|not work|broken|fail|throw|exception|crash|runs twice|issue/.test(lower)
-  ) {
+  if (/error|bug|debug|why does|doesn't work|not work|broken|fail|throw|exception|crash|runs twice|issue/.test(lower)) {
     return "debug";
   }
   if (
-    /help me build|build|create|make|project|app|website|service|api|system|dashboard|platform|feature|tool/.test(
-      lower
-    )
+    /help me build|build|create|make|project|app|website|service|api|system|dashboard|platform|feature|tool/.test(lower)
   ) {
     return "project";
   }
@@ -56,9 +52,7 @@ export async function classifyIntentWithDeps(message: string, deps: ClassifierDe
           { role: "system", content: promptText },
           {
             role: "user",
-            content:
-              `Classify this request and reply with only one exact label.\n` +
-              `Allowed labels: quick_help, debug, project.\nRequest: ${message}`,
+            content: `Classify this request and reply with only one exact label.\nAllowed labels: quick_help, debug, project.\nRequest: ${message}`,
           },
         ],
         { reasoning: "minimal" }

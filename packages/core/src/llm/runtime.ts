@@ -1,5 +1,5 @@
-import type { LLMAdapter } from "./adapter.js";
 import type { IO } from "../types.js";
+import type { LLMAdapter } from "./adapter.js";
 
 export async function safeComplete(
   llm: LLMAdapter,

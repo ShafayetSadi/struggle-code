@@ -1,9 +1,16 @@
-import { createInterface, type Interface } from "node:readline/promises";
 import { join, resolve } from "node:path";
+import { type Interface, createInterface } from "node:readline/promises";
 
 import chalk from "chalk";
 
-import { startSession, type IO, type Mode, type ProviderConfig, type ResponseChunk, type Session } from "@struggle-ai/core";
+import {
+  type IO,
+  type Mode,
+  type ProviderConfig,
+  type ResponseChunk,
+  type Session,
+  startSession,
+} from "@struggle-ai/core";
 
 import { cliIO } from "./ioImpl.js";
 
@@ -60,7 +67,9 @@ function printQuestion(text: string): void {
 }
 
 function printSubProblem(chunk: Extract<ResponseChunk, { kind: "sub_problem" }>): void {
-  process.stdout.write(`\n${chalk.blue.bold("Sub-problem")} ${chunk.subProblem.order + 1}: ${chunk.subProblem.description}\n`);
+  process.stdout.write(
+    `\n${chalk.blue.bold("Sub-problem")} ${chunk.subProblem.order + 1}: ${chunk.subProblem.description}\n`
+  );
   if (chunk.subProblem.questions.length > 0) {
     for (const question of chunk.subProblem.questions) {
       process.stdout.write(`${chalk.dim("-")} ${question}\n`);
@@ -168,7 +177,10 @@ function defaultTrailPath(projectPath: string, session: Session, format: "md" | 
   return join(projectPath, ".struggle-ai", `trail-${session.state.id}.${suffix}`);
 }
 
-async function streamChunks(iterable: AsyncIterable<ResponseChunk>, onChunk: (chunk: ResponseChunk) => void): Promise<void> {
+async function streamChunks(
+  iterable: AsyncIterable<ResponseChunk>,
+  onChunk: (chunk: ResponseChunk) => void
+): Promise<void> {
   for await (const chunk of iterable) {
     onChunk(chunk);
   }
@@ -209,7 +221,9 @@ export async function handleSlashCommand(
       return "continue";
     }
     case "trail-export": {
-      const outputPath = command.path ? resolve(projectPath, command.path) : defaultTrailPath(projectPath, session, command.format);
+      const outputPath = command.path
+        ? resolve(projectPath, command.path)
+        : defaultTrailPath(projectPath, session, command.format);
       await session.exportTrail(outputPath, command.format);
       process.stdout.write(`${chalk.cyan("trail")} ${outputPath}\n`);
       return "continue";

@@ -1,9 +1,9 @@
 import { DEFAULT_CONFIGS, resolveProviderConfig } from "./config.js";
+import { classifyIntentWithDeps } from "./gate/classifier.js";
 import { NoopIO } from "./io.js";
 import { createLLMAdapter } from "./llm/adapter.js";
-import { classifyIntentWithDeps } from "./gate/classifier.js";
 import { createSessionEngine } from "./session/engine.js";
-import type { IO, Intent, Mode, ProviderConfig, ResponseChunk, SessionState, ADR, TrailEntry } from "./types.js";
+import type { ADR, IO, Intent, Mode, ProviderConfig, ResponseChunk, SessionState, TrailEntry } from "./types.js";
 
 export interface Session {
   state: SessionState;

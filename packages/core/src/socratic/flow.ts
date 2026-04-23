@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 
-import type { ResponseChunk, SubProblem } from "../types.js";
 import type { SocraticRuntimeState } from "../session/state.js";
+import type { ResponseChunk, SubProblem } from "../types.js";
 
 export function deriveSubProblems(topic: string): SubProblem[] {
   return [
@@ -18,10 +18,7 @@ export function deriveSubProblems(topic: string): SubProblem[] {
     {
       id: uuidv4(),
       description: `Choose the boundary that keeps ${topic} small enough to reason about.`,
-      questions: [
-        "What module or service owns the core behavior?",
-        "What can stay out of scope for the first pass?",
-      ],
+      questions: ["What module or service owns the core behavior?", "What can stay out of scope for the first pass?"],
       resolved: false,
       order: 2,
     },

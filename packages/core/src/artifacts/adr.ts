@@ -2,8 +2,8 @@ import { v4 as uuidv4 } from "uuid";
 
 import type { LLMAdapter } from "../llm/adapter.js";
 import { loadPrompt } from "../prompts/loader.js";
-import { validateADR } from "../validation/adr.js";
 import type { ADR, IO } from "../types.js";
+import { validateADR } from "../validation/adr.js";
 
 export interface ADRInput {
   projectPath: string;
