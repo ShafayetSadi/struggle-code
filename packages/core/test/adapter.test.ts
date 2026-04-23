@@ -58,7 +58,7 @@ describe("createLLMAdapter", () => {
   });
 
   it("throws an explicit error when the API key is missing", async () => {
-    delete process.env.ANTHROPIC_API_KEY;
+    process.env.ANTHROPIC_API_KEY = "";
     const { createLLMAdapter } = await import("../src/llm/adapter.js");
     const adapter = createLLMAdapter({
       provider: "anthropic",

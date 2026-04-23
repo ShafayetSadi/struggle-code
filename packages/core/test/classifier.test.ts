@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { DEFAULT_CONFIGS } from "../src/config.js";
 import { classifyIntentWithDeps, fallbackIntentHeuristic } from "../src/gate/classifier.js";
 import type { LLMAdapter } from "../src/llm/adapter.js";
-import { DEFAULT_CONFIGS } from "../src/config.js";
 
 function createAdapter(responses: string[]): LLMAdapter {
   return {

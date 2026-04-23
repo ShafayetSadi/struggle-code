@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 
-import type { ResponseChunk } from "../types.js";
 import type { GuidedRuntimeState, MilestoneRecord } from "../session/state.js";
+import type { ResponseChunk } from "../types.js";
 
 export interface DesignQuestion {
   category: string;
@@ -67,7 +67,14 @@ export function createDesignBriefMarkdown(state: GuidedRuntimeState): string {
     "",
     "## Interview Notes",
     "",
-    ...state.answers.flatMap((answer) => [`### ${answer.category}`, "", `Q: ${answer.question}`, "", `A: ${answer.answer}`, ""]),
+    ...state.answers.flatMap((answer) => [
+      `### ${answer.category}`,
+      "",
+      `Q: ${answer.question}`,
+      "",
+      `A: ${answer.answer}`,
+      "",
+    ]),
   ];
 
   return `${lines.join("\n")}\n`;
@@ -86,7 +93,8 @@ export function deriveMilestones(topic: string, summary: string): MilestoneRecor
   if (lower.includes("database") || lower.includes("store") || lower.includes("data") || lower.includes("fastapi")) {
     milestones.push({
       title: "Wire storage and server boundaries",
-      description: "Add the data model, persistence boundary, and the first server endpoints needed for the happy path.",
+      description:
+        "Add the data model, persistence boundary, and the first server endpoints needed for the happy path.",
       checkpointLabel: "What data crosses the boundary here, and why does it belong in storage?",
     });
   } else {
@@ -99,7 +107,8 @@ export function deriveMilestones(topic: string, summary: string): MilestoneRecor
 
   milestones.push({
     title: "Close the loop for delivery",
-    description: "Add tests, deployment assumptions, and one operational safeguard so the milestone can be demoed reliably.",
+    description:
+      "Add tests, deployment assumptions, and one operational safeguard so the milestone can be demoed reliably.",
     checkpointLabel: "How would you prove this milestone still works after the next refactor?",
   });
 

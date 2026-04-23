@@ -1,5 +1,5 @@
-import type { ADR, SessionState, TrailEntry } from "../types.js";
 import type { ModeHistoryEntry } from "../session/state.js";
+import type { ADR, SessionState, TrailEntry } from "../types.js";
 
 function renderChunkPayload(payload: unknown): string {
   if (typeof payload === "string") {
@@ -37,7 +37,9 @@ export function renderTrailMarkdown(
       lines.push(`Intent: \`${entry.intent}\``);
       lines.push("");
     }
-    const maybePayload = entry.payload as { chunks?: Array<{ kind: string; value?: string; language?: string; adr?: ADR }> };
+    const maybePayload = entry.payload as {
+      chunks?: Array<{ kind: string; value?: string; language?: string; adr?: ADR }>;
+    };
     if (maybePayload && Array.isArray(maybePayload.chunks)) {
       for (const chunk of maybePayload.chunks) {
         if (chunk.kind === "code") {

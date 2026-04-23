@@ -32,7 +32,10 @@ function withProviderApiKey<T>(config: ProviderConfig, run: (apiKey: string) => 
 }
 
 function normalizePlainTextOutput(text: string): string {
-  return text.replace(/\r/g, "").replace(/[ \t]+\n/g, "\n").trim();
+  return text
+    .replace(/\r/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .trim();
 }
 
 function extractPlainText(content: unknown): string {
