@@ -23,14 +23,22 @@ export interface LLMAdapter {
   stream(messages: LLMMessage[], options?: CompletionOptions): AsyncIterable<string>;
 }
 
-function withProviderApiKey<T>(config: ProviderConfig, run: () => Promise<T>): Promise<T> {
-  if (!process.env[config.apiKeyEnv]) {
+function withProviderApiKey<T>(config: ProviderConfig, run: (apiKey: string) => Promise<T>): Promise<T> {
+  const apiKey = process.env[config.apiKeyEnv];
+  if (!apiKey) {
     throw new Error(`Missing API key: set ${config.apiKeyEnv} in your environment`);
   }
-  return run();
+  return run(apiKey);
 }
 
-function getTextFromCompletionContent(content: unknown): string {
+function normalizePlainTextOutput(text: string): string {
+  return text.replace(/\r/g, "").replace(/[ \t]+\n/g, "\n").trim();
+}
+
+function extractPlainText(content: unknown): string {
+  if (typeof content === "string") {
+    return content;
+  }
   if (!Array.isArray(content)) {
     return "";
   }
@@ -95,27 +103,25 @@ export function createLLMAdapter(config: ProviderConfig): LLMAdapter {
 
   return {
     async complete(messages, options) {
-      const apiKey = process.env[config.apiKeyEnv];
-      return withProviderApiKey(config, async () => {
+      return withProviderApiKey(config, async (apiKey) => {
         const response = await completeSimple(model, toContext(messages), {
-          ...(apiKey ? { apiKey } : {}),
+          apiKey,
           ...(options?.reasoning ? { reasoning: options.reasoning } : {}),
         });
-        return getTextFromCompletionContent(response.content);
+        return normalizePlainTextOutput(extractPlainText(response.content));
       });
     },
     async *stream(messages, options) {
-      const apiKey = process.env[config.apiKeyEnv];
-      const events = await withProviderApiKey(config, async () =>
+      const events = await withProviderApiKey(config, async (apiKey) =>
         streamSimple(model, toContext(messages), {
-          ...(apiKey ? { apiKey } : {}),
+          apiKey,
           ...(options?.reasoning ? { reasoning: options.reasoning } : {}),
         })
       );
 
       for await (const event of events) {
         if (event.type === "text_delta") {
-          yield event.delta;
+          yield event.delta.replace(/\r/g, "");
         }
       }
     },
