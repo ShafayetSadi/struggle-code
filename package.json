@@ -1,0 +1,25 @@
+{
+  "name": "struggle-ai",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": ["packages/*", "apps/*"],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "check": "biome check .",
+    "format": "biome format --write .",
+    "lint": "biome lint .",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "tsc --build",
+    "dev:cli": "npm run dev --workspace @struggle-ai/cli",
+    "dev:landing": "npm run dev --workspace landing",
+    "dev:vscode": "npm run dev --workspace struggle-ai-vscode"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.0",
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.5"
+  }
+}

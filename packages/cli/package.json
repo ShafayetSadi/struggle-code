@@ -1,0 +1,26 @@
+{
+  "name": "@struggle-ai/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "struggle": "./dist/index.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@mariozechner/pi-tui": "^0.69.0",
+    "@struggle-ai/core": "0.1.0",
+    "chalk": "^5.6.2",
+    "commander": "^14.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0"
+  }
+}

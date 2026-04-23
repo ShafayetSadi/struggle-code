@@ -1,0 +1,52 @@
+{
+  "name": "struggle-ai-vscode",
+  "displayName": "Struggle AI",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "main": "./dist/extension.js",
+  "activationEvents": ["onCommand:struggle.start"],
+  "contributes": {
+    "commands": [
+      {
+        "command": "struggle.start",
+        "title": "Struggle AI: Start Session"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "struggle",
+          "title": "Struggle AI",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "struggle": [
+        {
+          "id": "struggle.trailView",
+          "name": "Learning Trail"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node ./scripts/build.mjs",
+    "dev": "node ./scripts/build.mjs --watch",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@struggle-ai/core": "0.1.0",
+    "vitest": "4.1.5"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "@types/vscode": "^1.116.0",
+    "esbuild": "^0.28.0",
+    "vscode": "^1.1.36"
+  }
+}
