@@ -42,6 +42,14 @@ function createPromptedTextChunk(text: string): ResponseChunk {
   return { kind: "text", value: `${text.trim()}\n` };
 }
 
+function looksLikeMetaQuestion(message: string): boolean {
+  const normalized = message.trim().toLowerCase();
+  const wordCount = normalized.split(/\s+/).filter(Boolean).length;
+  if (normalized.length === 0) return false;
+  if (normalized.endsWith("?") && wordCount <= 12) return true;
+  return /^(what|why|how|help|wait|bug|huh)\b/.test(normalized) && wordCount <= 12;
+}
+
 function messageShowsUnderstanding(message: string): boolean {
   const normalized = message.trim().toLowerCase();
   const wordCount = normalized.split(/\s+/).filter(Boolean).length;
@@ -117,14 +125,14 @@ export async function createSessionEngine(projectPath: string, io: IO, config?: 
 
   async function buildQuickHelp(message: string, intent: Intent): Promise<ResponseChunk[]> {
     const fallback = `Start from the smallest mental model first: ${message.trim()} usually makes more sense once you name the input, the transformation, and the output.\n`;
+    const prompt = await loadPrompt("quick-help.md", io);
     const streamed = await collectStream(
       llm,
       io,
       [
         {
           role: "system",
-          content:
-            "You are a concise coding mentor. Give a short explanation that teaches the concept, not just the answer.",
+          content: prompt,
         },
         { role: "user", content: message },
       ],
@@ -138,13 +146,14 @@ export async function createSessionEngine(projectPath: string, io: IO, config?: 
   async function buildDebugHelp(message: string, intent: Intent): Promise<ResponseChunk[]> {
     const fallback =
       "Treat this as a debugging funnel: restate the expected behavior, isolate one failing path, and compare actual input/output before changing code.\n";
+    const prompt = await loadPrompt("debug.md", io);
     const streamed = await collectStream(
       llm,
       io,
       [
         {
           role: "system",
-          content: "You are a debugging mentor. Respond with a concrete diagnosis plan in 3 short steps.",
+          content: prompt,
         },
         { role: "user", content: message },
       ],
@@ -184,6 +193,23 @@ export async function createSessionEngine(projectPath: string, io: IO, config?: 
     const guided = runtime.guided;
     if (!guided) return [];
     const currentQuestion = getCurrentDesignQuestion(guided);
+
+    if (looksLikeMetaQuestion(message)) {
+      deriveDisplayState(state, runtime);
+      const chunks: ResponseChunk[] = [
+        createPromptedTextChunk(
+          "You are still in the scoping interview. Answer the current design question in one or two concrete sentences so I can keep the plan coherent."
+        ),
+        {
+          kind: "question",
+          text: currentQuestion.question,
+          awaitsInput: true,
+        },
+      ];
+      recordChunks(chunks, "project");
+      return chunks;
+    }
+
     guided.answers.push({
       category: currentQuestion.category,
       question: currentQuestion.question,

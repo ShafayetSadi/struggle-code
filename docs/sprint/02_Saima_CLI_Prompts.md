@@ -7,6 +7,53 @@
 
 ---
 
+## Current Status
+
+This doc started as the build plan. It now also serves as your next-morning handoff.
+
+Already shipped locally:
+
+- `packages/cli/src/repl.ts` exists and is wired from `packages/cli/src/index.ts`
+- slash commands implemented: `/help`, `/mode`, `/share`, `/stuck`, `/hint`, `/trail export`, `/exit`
+- REPL renders text, code, question, ADR, checkpoint, and sub-problem chunks
+- guided interview progress line now shows `Question N of 5`
+- CLI README exists at `packages/cli/README.md`
+- prompt files now exist for classifier, quick help, debug, guided, standard, full socratic, stuck flow, and hints
+- shared manual QA lives in `docs/manual-testing.md`
+
+Recent integration notes:
+
+- use the local workspace CLI for testing:
+  `npm exec --workspace packages/cli struggle -- --project /tmp/struggle-fastapi-demo`
+- do not use `npx @struggle-ai/cli` for local QA; that may run a published version without the latest fixes
+- a recent core fix stops short meta-input like `what is this bug` from being swallowed as a guided interview answer
+
+## Start Here Tomorrow Morning
+
+Read this section first. This is your actual starting point now.
+
+1. Pull the latest `dev` branch and read `docs/manual-testing.md`.
+2. Run the local CLI exactly as documented there, with a real provider key.
+3. Execute Test Flow A, Test Flow B, Test Flow C, and Test Flow D in that file.
+4. Log every issue using the bug format in `docs/manual-testing.md`.
+5. Fix CLI-only issues in `packages/cli/` immediately.
+6. For core issues, capture exact reproduction steps and hand them to Sadi.
+
+Your first focus tomorrow is not building new commands. It is:
+
+- CLI polish during shared QA
+- rendering glitches
+- prompt wording that feels off in live use
+- command discoverability via `/help`
+- recording-readiness for Arif
+
+If the manual flows are clean, your next moves are:
+
+- tighten terminal rendering for readability
+- smooth any awkward prompt wording after live runs
+- help Arif capture clean CLI recordings
+- support final bug bash before demo/submission
+
 ## Your Prime Directive
 
 Your code lives in `packages/cli/`. You import `@socrates-ai/core` and build the terminal experience around it. You do **not** touch `packages/core/` directly — if you need a new core function, ask Sadi in team chat.
@@ -96,7 +143,7 @@ Before committing, each prompt must:
 | --- | --- | --- |
 | 0:00–0:30 | Kickoff call with team | Sadi |
 | 0:30–1:00 | Verify scaffold: `npm install && npm run build` succeeds on your machine | Scaffold done |
-| 1:00–2:00 | Read `packages/core/src/types.ts` + `index.ts`. Run `npx @socrates-ai/cli` and explore the stub output. | Scaffold done |
+| 1:00–2:00 | Read `packages/core/src/types.ts` + `index.ts`. Run the local workspace CLI and explore the output. Use `npm exec --workspace packages/cli struggle -- --project /tmp/struggle-fastapi-demo`. | Scaffold done |
 | 2:00–4:00 | Open Claude Sonnet 4.5 web UI. Start drafting `classify.md` and `design-interview.md` prompts — these are Sadi's first needs. | None |
 
 **Checkpoint at H4:** You have drafts of `classify.md` and `design-interview.md` that pass the mentor vibe test on 3 sample inputs.
@@ -127,6 +174,16 @@ Before committing, each prompt must:
 | 17–20 | Draft `stuck-diagnostic.md` + `hint-L1/L2/L3.md` | H20 |
 
 **Checkpoint at H20:** CLI demo runs Guided mode end-to-end. You can run `socrates` in a test project and complete a FastAPI blog design conversation, get a milestone, answer comprehension, see the ADR. This is the product's moment of truth — if this works, the hackathon is winnable.
+
+### Updated Next Actions
+
+Ignore the original build-order blocks that are already complete. Your active checklist now is:
+
+1. Run `docs/manual-testing.md` from top to bottom using the local workspace CLI.
+2. Fix CLI issues in `packages/cli/` immediately when reproduced.
+3. Tune prompt copy only after hearing the live output in the shared QA flows.
+4. Keep `/help` accurate whenever command behavior changes.
+5. Make the CLI recording-clean for Arif.
 
 ### Phase 3 — Cover Sadi + Finish Prompts (H20–H28)
 
@@ -167,22 +224,16 @@ Hard sleep. Phone on for team emergencies only.
 
 | I am blocked by | On what | Until when | Workaround |
 | --- | --- | --- | --- |
-| Sadi | Real `classifyIntent()` | H6 | Use stub; CLI still functional |
-| Sadi | Real Guided mode in `sendMessage()` | H14 | Stub returns mock milestones; wire UI now, test real data later |
-| Sadi | Real `getTrail()` | H20 | Stub returns mock entries; `/trail export` won't produce meaningful output until then, but the command itself works |
-| Sadi | Real `exportTrail()` | H20 | Same as above |
+| Sadi | Core bug fixes discovered during manual QA | Ongoing | Capture exact reproduction in `docs/manual-testing.md` format |
 
-**Key insight:** Because the scaffold's stubs return realistic mock data, you can build ALL your CLI code from H4 onward without waiting. You're never actually blocked during the build phase.
+**Key insight:** The build phase is mostly complete. Your leverage now is shared QA, fast CLI polish, and giving Sadi precise reproductions when the issue is in core.
 
 ## Who Is Blocked By You
 
 | Blocked | What they need | By when | Risk if late |
 | --- | --- | --- | --- |
-| Sadi | `classify.md` prompt | H6 | Sadi can't wire real classifier |
-| Sadi | `design-interview.md` prompt | H10 | Sadi can't build design interview real |
-| Sadi | `guided-milestone.md` + `comprehension-check.md` | H14 | Core Guided mode delayed |
-| Sadi | `adr-generator.md` | H17 | ADRs stay mock |
-| Arif | Clean CLI recording-ready state | H40 | Video demos get delayed |
+| Sadi | Clear CLI-side bug reports from shared QA | Ongoing | Core fixes slow down if reproductions are vague |
+| Arif | Clean CLI recording-ready state | Before recording session | Video demos get delayed |
 
 ---
 
@@ -192,7 +243,7 @@ Hard sleep. Phone on for team emergencies only.
 2. **Iterate prompts in the web UI, not by rebuilding the CLI.** This is a 10x speed difference.
 3. **Every new slash command needs to be listed in `/help`.** If a judge types `/help`, they should see everything.
 4. **The REPL must never crash silently.** Every unhandled exception becomes a test case.
-5. **Streaming must feel smooth.** If responses appear in big chunks instead of token-by-token, something's wrong. Check with Sadi.
+5. **Test with the local workspace CLI, not `npx @struggle-ai/cli`.** The published package can hide local fixes and waste QA time.
 6. **Your sleep window is non-negotiable.** Sadi is back at H28 and needs you fresh for the integration phase at H36.
 
 ---

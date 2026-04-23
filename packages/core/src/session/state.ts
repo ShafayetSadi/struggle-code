@@ -98,10 +98,9 @@ export function deriveDisplayState(state: SessionState, runtime: RuntimeSessionC
   if (runtime.guided) {
     const milestone = runtime.guided.milestones[runtime.guided.activeMilestoneIndex];
     state.activeMilestone = milestone?.title ?? "Design interview";
-    const currentQuestion = runtime.guided.answers[runtime.guided.questionIndex]?.question;
     state.activeSubProblem =
       runtime.guided.awaiting === "design_answer"
-        ? currentQuestion ?? "Gathering product constraints"
+        ? `Design question ${Math.min(runtime.guided.questionIndex + 1, 5)} of 5`
         : runtime.guided.awaiting === "checkpoint" || runtime.guided.awaiting === "probe"
           ? "Explain the milestone back before moving on"
           : "Guided flow ready for the next milestone";

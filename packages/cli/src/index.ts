@@ -8,6 +8,9 @@ import { pathToFileURL } from "node:url";
 import { DEFAULT_CONFIGS, type Provider, type ProviderConfig, loadConfig } from "@struggle-ai/core";
 import { Command } from "commander";
 
+import { cliIO } from "./ioImpl.js";
+import { runRepl } from "./repl.js";
+
 const CONFIG_DIR = join(homedir(), ".struggle-ai");
 const CONFIG_PATH = join(CONFIG_DIR, "config.json");
 
@@ -38,8 +41,14 @@ export function createProgram(): Command {
     .name("struggle")
     .description("Struggle AI CLI")
     .version("0.1.0")
-    .action(() => {
-      process.stdout.write("Struggle AI CLI v0.1.0 — REPL coming soon\n");
+    .option("--project <path>", "Project path for the interactive session", process.cwd())
+    .action(async (options: { project: string }) => {
+      const configValue = await getCurrentConfig();
+      await runRepl({
+        projectPath: options.project,
+        io: cliIO,
+        config: configValue,
+      });
     });
 
   const config = program.command("config").description("Manage Struggle AI configuration");
@@ -63,12 +72,16 @@ export function createProgram(): Command {
   });
 
   program
-    .command("trail")
-    .description("Export session trail")
-    .command("export")
-    .option("--format <format>", "Output format", "md")
-    .action((_options: { format: "md" | "pdf" }) => {
-      process.stdout.write("No active session\n");
+    .command("repl")
+    .description("Start the interactive REPL")
+    .option("--project <path>", "Project path for the interactive session", process.cwd())
+    .action(async (options: { project: string }) => {
+      const configValue = await getCurrentConfig();
+      await runRepl({
+        projectPath: options.project,
+        io: cliIO,
+        config: configValue,
+      });
     });
 
   return program;
@@ -95,3 +108,4 @@ if (isDirectExecution()) {
 }
 
 export { cliIO } from "./ioImpl.js";
+export { formatPrompt, HELP_TEXT, parseSlashCommand, runRepl } from "./repl.js";

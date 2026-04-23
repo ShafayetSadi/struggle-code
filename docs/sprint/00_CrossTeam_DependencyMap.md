@@ -4,6 +4,17 @@
 
 This map shows every hard dependency between team members. If you're waiting on someone or someone is waiting on you, find it here. Every dependency has a workaround noted so no one is ever truly blocked.
 
+## Current Status Snapshot
+
+As of the latest local integration pass:
+
+- `packages/core` guided flow, standard mode, full socratic mode, ADR generation, and trail export are implemented
+- `packages/cli` REPL is implemented with `/help`, `/mode`, `/share`, `/stuck`, `/hint`, `/trail export`, and `/exit`
+- prompt files in `packages/core/src/prompts/*.md` exist for classifier, quick help, debug, guided, standard, full socratic, ADRs, stuck flow, and hints
+- shared manual QA now lives in `docs/manual-testing.md`
+- the known recent fix is the guided interview guard: short meta-input like `what is this bug` should no longer be swallowed as a design answer
+- remaining work is integration QA, bug bash, demo polish, sample artifacts, and publish/submission prep
+
 ---
 
 ## Quick Reference: Who Owns What
@@ -39,24 +50,24 @@ off   │     │     │ ed   │     │    │     │     │     ration│s
 
 | Who needs it | What | When | If late, workaround |
 | --- | --- | --- | --- |
-| Saima | Real `classifyIntent()` | H6 | Stub works; CLI functional without real classification |
-| Saima | Guided mode real in `sendMessage()` | H14 | Stub yields mock milestones; CLI wiring all valid |
-| Saima, Jifat | Real `getTrail()` | H20 | Stub returns mock entries; UIs still render |
-| Saima | Real `exportTrail()` | H20 | `/trail export` writes mock Markdown until real |
+| Saima | Real `classifyIntent()` | Done locally | No workaround needed now |
+| Saima | Guided mode real in `sendMessage()` | Done locally | No workaround needed now |
+| Saima, Jifat | Real `getTrail()` | Done locally | No workaround needed now |
+| Saima | Real `exportTrail()` | Done locally | No workaround needed now |
 | Arif | Sample ADR (committed to demo repo) | H17 | Arif hand-crafts a placeholder Markdown, swaps later |
 | Arif | Sample Learning Trail (committed to demo repo) | H22 | Same — placeholder first, real swap at H22 |
-| Jifat | Standard + Full Socratic modes in core | H32/H36 | Jifat ships UI for Guided only; adds mode dropdown options that pass through |
+| Jifat | Standard + Full Socratic modes in core | Done locally | Jifat should smoke-test pass-through and rendering now |
 
 ## Saima → Others
 
 | Who needs it | What | When | If late, workaround |
 | --- | --- | --- | --- |
-| Sadi | `classify.md` prompt | H6 | Sadi can't wire real classifier; uses keyword stub longer |
-| Sadi | `design-interview.md` prompt | H10 | Sadi falls back to a simpler 3-question flow |
-| Sadi | `guided-milestone.md` + `comprehension-check.md` | H14 | Core Guided mode delayed; Saima's CLI shows stub responses |
-| Sadi | `adr-generator.md` | H17 | ADRs stay mock; landing page uses placeholder ADR |
-| Sadi | `stuck-diagnostic.md` | H20 | `/stuck` command shows hardcoded 4-question flow without LLM evaluation |
-| Arif | CLI in recording-ready state (polished output) | H26 | Arif records with plain asciicast; re-records after H26 |
+| Sadi | `classify.md` prompt | Done locally | No workaround needed now |
+| Sadi | `design-interview.md` prompt | Done locally | No workaround needed now |
+| Sadi | `guided-milestone.md` + `comprehension-check.md` | Done locally | No workaround needed now |
+| Sadi | `adr-generator.md` | Done locally | No workaround needed now |
+| Sadi | `stuck-diagnostic.md` + hint prompts | Done locally | No workaround needed now |
+| Arif | CLI in recording-ready state (polished output) | In progress | Use `docs/manual-testing.md` to find recording blockers quickly |
 
 ## Jifat → Others
 
@@ -115,8 +126,8 @@ At any given hour, **minimum 3 people awake**. No exceptions unless a genuine em
 ## The Five Sentences That Decide This Hackathon
 
 1. "The scaffold's stubs are realistic enough to build against — no one is waiting."
-2. "If Sadi is the bottleneck, everyone stalls. If Sadi stays responsive, everyone ships."
-3. "Saima's prompts are the product's voice. Iterate them in Claude web UI, not in code."
+2. "If Sadi is the bottleneck, everyone stalls. Right now the bottleneck is integration quality, not missing scaffolding."
+3. "Saima's prompts are the product's voice. Iterate them in Claude web UI, then validate them with `docs/manual-testing.md`."
 4. "Jifat's extension is intentionally minimal. It proves the core ports. It does not replicate the CLI."
 5. "Arif ships the story. The story is what judges remember."
 

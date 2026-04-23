@@ -37,6 +37,30 @@ describe("session engine", () => {
     expect(session.state.activeMilestone).toBe("Define the first user-facing slice");
   });
 
+  it("does not treat a short meta question as a guided interview answer", async () => {
+    const io = new MemoryIO();
+    const session = await startSession("/tmp/project", io);
+
+    await collectChunks(session.sendMessage("Help me build a blogging website with FastAPI"));
+    await collectChunks(session.sendMessage("An author publishes posts for readers."));
+    const metaTurn = await collectChunks(session.sendMessage("what is this bug"));
+
+    expect(metaTurn).toEqual([
+      {
+        kind: "text",
+        value:
+          "You are still in the scoping interview. Answer the current design question in one or two concrete sentences so I can keep the plan coherent.\n",
+      },
+      {
+        kind: "question",
+        text: "What is the core workflow the user must complete from start to finish?",
+        awaitsInput: true,
+      },
+    ]);
+    expect(session.state.activeMilestone).toBe("Design interview");
+    expect(session.state.activeSubProblem).toBe("Design question 2 of 5");
+  });
+
   it("generates an ADR after a guided checkpoint passes", async () => {
     const io = new MemoryIO();
     const session = await startSession("/tmp/project", io);

@@ -7,6 +7,33 @@
 
 ---
 
+## Current Status
+
+This doc started as the build-order plan. It now also acts as the current-state handoff.
+
+Already shipped locally:
+
+- real `classifyIntent()`
+- guided interview flow with design brief writing
+- guided milestone loop with checkpoint and ADR generation
+- trail accumulation and Markdown export
+- standard mode and full socratic mode
+- `packages/core/README.md`
+- regression fix: short meta-input during guided interview should no longer be recorded as a design answer
+
+Recent integration notes:
+
+- use the local workspace CLI for testing: `npm exec --workspace packages/cli struggle -- --project /tmp/struggle-fastapi-demo`
+- do not use `npx @struggle-ai/cli` for local QA; that may hit a published package
+- shared manual QA is now documented in `docs/manual-testing.md`
+
+What remains on your side:
+
+- run and supervise the shared manual QA flow with a real provider key
+- fix integration bugs found in guided, standard, full socratic, trail export, and rendering boundaries
+- generate sample ADR and Trail artifacts for Arif
+- finish publish prep and submission-day smoke tests
+
 ## Your Prime Directive
 
 You are the only person who writes code in `packages/core/`. Everyone else depends on your stubs being replaced with real implementations — one at a time, without breaking the API surface. Your job has three parts, in priority order:
@@ -141,6 +168,16 @@ Replace stubs in this specific order. After each one, **announce in the team cha
 | 37–39 | Core bug bash. Fix everything surfaced in the walkthrough. Prompt tuning round 2 based on real session feedback. |
 | 39–40 | Update `packages/core/README.md` with install instructions and quick-start. Publish to npm under `@socrates-ai/core@0.1.0` (or npm equivalent of test channel) so Arif can link from landing page. |
 
+### Updated Next Actions
+
+Ignore the original build-order sections that are already complete. From this point forward, your active checklist is:
+
+1. Run `docs/manual-testing.md` with a real API key using the local workspace CLI.
+2. Fix anything that breaks in `packages/core` or the CLI/core boundary.
+3. Commit sample ADR and Trail outputs for Arif to embed.
+4. Run `npm run check && npm run typecheck && npm run test`.
+5. Decide whether to unmark `packages/core` as `"private": true` for publish prep.
+
 ### Phase 6 — Video + Submission (H40–H48)
 
 | Hour | Task |
@@ -162,12 +199,9 @@ Replace stubs in this specific order. After each one, **announce in the team cha
 
 | Blocked | What they need | By when | Risk if late |
 | --- | --- | --- | --- |
-| Saima | Real `classifyIntent()` | H6 | CLI works on stubs until H6; low risk |
-| Saima | Guided mode working end-to-end | H14 | CLI demo looks real only after this; medium risk |
-| Saima | Trail export working | H20 | `/trail export` command in CLI depends on this; medium risk |
-| Jifat | Real `sendMessage()` | H10 | Extension chat panel shows mock responses until then; low risk |
-| Jifat | `getTrail()` returning real entries | H20 | Sidebar tree view shows real data only after; medium risk |
-| Arif | Sample ADR + sample Trail files | H22 | Landing page embeds are placeholder until then; medium risk |
+| Saima | Integration answers and core bug fixes | Ongoing | CLI QA stalls if core questions sit unanswered |
+| Jifat | Stable behavior across guided, standard, full socratic, and trail reads | Ongoing | Extension polish gets blocked on undefined behavior |
+| Arif | Sample ADR + sample Trail files | Next integration cycle | Landing page embeds remain placeholder |
 
 ---
 
@@ -176,7 +210,7 @@ Replace stubs in this specific order. After each one, **announce in the team cha
 1. **Never change `packages/core/src/types.ts` without announcing it in team chat first.** If you add a new `TrailEntryType` or a new `ResponseChunk` kind, post in chat: *"Adding `ResponseChunk.kind = 'whatever'` — Saima/Jifat, check your switch statements."*
 2. **Never push to `main` without `npm run check && npm run typecheck && npm run test` passing.** Broken main blocks everyone.
 3. **Prompt files live in `packages/core/src/prompts/*.md`.** Iterate them in a plain Claude web UI first, paste final version into the file. Do not iterate prompts by rebuilding and testing the CLI each time — too slow.
-4. **Defend scope freeze at H24.** If anyone pitches a new feature after H24, the answer is *"post-hackathon, yes. Right now, no."* That includes your own ideas.
+4. **Use `docs/manual-testing.md` as the shared bug-bash script.** If someone reports a bug from a different local flow, reproduce it in the shared flow before broadening scope.
 5. **Your sleep window is non-negotiable.** Garbage decisions at H30 cost more than missed features. Saima is capable; trust her.
 
 ---
