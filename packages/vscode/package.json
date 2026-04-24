@@ -1,9 +1,13 @@
 {
   "name": "struggle-ai-vscode",
   "displayName": "Struggle AI",
+  "description": "A Socratic coding mentor that guides you through problems with questions, not answers.",
   "version": "0.1.0",
+  "publisher": "struggle-ai",
   "private": true,
-  "type": "module",
+  "icon": "media/icon.png",
+  "categories": ["Machine Learning", "Education", "Other"],
+  "keywords": ["ai", "coding", "mentor", "socratic", "learning"],
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -35,18 +39,18 @@
     }
   },
   "scripts": {
+    "vscode:prepublish": "node ./scripts/build.mjs",
     "build": "node ./scripts/build.mjs",
     "dev": "node ./scripts/build.mjs --watch",
     "test": "vitest run"
   },
   "dependencies": {
-    "@struggle-ai/core": "0.1.0",
-    "vitest": "4.1.5"
+    "@struggle-ai/core": "0.1.0"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
     "@types/vscode": "^1.116.0",
     "esbuild": "^0.28.0",
-    "vscode": "^1.1.36"
+    "vitest": "4.1.5"
   }
 }
