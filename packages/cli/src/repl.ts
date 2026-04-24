@@ -1,417 +1,15 @@
-import { join, resolve } from "node:path";
 import { type Interface, createInterface } from "node:readline/promises";
 
-import {
-  CURSOR_MARKER,
-  Input,
-  Key,
-  ProcessTerminal,
-  TUI,
-  truncateToWidth,
-  visibleWidth,
-  wrapTextWithAnsi,
-} from "@mariozechner/pi-tui";
-import chalk from "chalk";
+import { type IO, type ProviderConfig, startSession } from "@struggle-ai/core";
 
-import {
-  type IO,
-  type Mode,
-  type ProviderConfig,
-  type ResponseChunk,
-  type Session,
-  startSession,
-} from "@struggle-ai/core";
-
+import { CommandMenu } from "./repl/commandMenu.js";
+import { HELP_TEXT, handleSlashCommand, parseSlashCommand, streamChunks, syncHintState } from "./repl/commands.js";
+import { formatChunk, formatPrompt, P, chalk } from "./repl/formatting.js";
+import { createTuiIO } from "./repl/io.js";
+import { Key, ProcessTerminal, TUI } from "./pi-tui/src/index.js";
+import { ReplScreen } from "./repl/screen.js";
+import type { ReplState } from "./repl/types.js";
 import { cliIO } from "./ioImpl.js";
-
-interface ReplState {
-  hintLevel: 1 | 2 | 3;
-  lastMilestone: string | undefined;
-}
-
-type SlashCommand =
-  | { kind: "help" }
-  | { kind: "exit" }
-  | { kind: "mode"; mode: Mode }
-  | { kind: "share"; path: string }
-  | { kind: "stuck" }
-  | { kind: "hint"; level?: 1 | 2 | 3 }
-  | { kind: "trail-export"; path?: string; format: "md" | "pdf" };
-
-const HELP_TEXT = `
-Available commands:
-  /help                     Show this help
-  /mode <guided|standard|full-socratic>
-                            Switch learning mode
-  /share <path>             Share a file with the active session
-  /stuck                    Trigger a stuck-session intervention
-  /hint [1|2|3]             Ask for a hint; defaults to the next level
-  /trail export [path] [--format md|pdf]
-                            Export the learning trail
-  /exit                     Quit the REPL
-`.trim();
-
-function createDivider(label: string): string {
-  return `${chalk.dim("=".repeat(14))} ${chalk.bold(label)} ${chalk.dim("=".repeat(14))}`;
-}
-
-function padAnsi(text: string, width: number): string {
-  return text + " ".repeat(Math.max(0, width - visibleWidth(text)));
-}
-
-function frameSection(title: string, lines: string[], width: number): string[] {
-  const innerWidth = Math.max(12, width - 4);
-  const top = chalk.dim(`+${"-".repeat(innerWidth + 2)}+`);
-  const label = ` ${title.toUpperCase()} `;
-  const headerFill = Math.max(0, innerWidth - label.length);
-  const header = chalk.dim("|") + chalk.bold(label) + chalk.dim(`${"-".repeat(headerFill)}|`);
-  const body = (lines.length > 0 ? lines : [""]).flatMap((line) => {
-    const wrapped = wrapTextWithAnsi(line, innerWidth);
-    return (wrapped.length > 0 ? wrapped : [""]).map(
-      (wrappedLine) => chalk.dim("| ") + padAnsi(wrappedLine, innerWidth) + chalk.dim(" |")
-    );
-  });
-  return [top, header, ...body, top];
-}
-
-function modeBadge(mode: Mode): string {
-  const label = ` ${mode.toUpperCase()} `;
-  if (mode === "guided") return chalk.bgCyan.black(label);
-  if (mode === "standard") return chalk.bgYellow.black(label);
-  return chalk.bgMagenta.white(label);
-}
-
-function toneByKind(kind: LogKind): ((value: string) => string) | undefined {
-  if (kind === "user") return chalk.cyan;
-  if (kind === "error") return chalk.red;
-  if (kind === "system") return chalk.gray;
-  return undefined;
-}
-
-function formatCodeBlock(language: string, value: string): string[] {
-  const lines = value.trimEnd().split("\n");
-  return [chalk.cyan(`code - ${language}`), ...lines.map((line) => chalk.green(line))];
-}
-
-function formatADRCard(chunk: Extract<ResponseChunk, { kind: "adr" }>): string[] {
-  const { adr } = chunk;
-  const lines = [
-    `${chalk.magenta.bold("ADR")} ${chalk.magenta(adr.title)}`,
-    `${chalk.dim("Context:")} ${adr.context}`,
-    `${chalk.dim("Decision:")} ${adr.decision}`,
-    `${chalk.dim("Consequences:")} ${adr.consequences}`,
-  ];
-  if (adr.docLinks.length > 0) {
-    lines.push(`${chalk.dim("Docs:")} ${adr.docLinks.join(", ")}`);
-  }
-  return lines;
-}
-
-function formatQuestion(text: string): string[] {
-  return [`${chalk.yellow("?")} ${chalk.bold(text)}`];
-}
-
-function formatSubProblem(chunk: Extract<ResponseChunk, { kind: "sub_problem" }>): string[] {
-  const lines = [chalk.blue.bold(`Sub-problem ${chunk.subProblem.order + 1}: ${chunk.subProblem.description}`)];
-  for (const question of chunk.subProblem.questions) {
-    lines.push(`${chalk.dim("-")} ${question}`);
-  }
-  return lines;
-}
-
-function formatChunk(chunk: ResponseChunk): string[] {
-  switch (chunk.kind) {
-    case "text":
-      return chunk.value.split("\n");
-    case "code":
-      return formatCodeBlock(chunk.language, chunk.value);
-    case "question":
-      return formatQuestion(chunk.text);
-    case "adr":
-      return formatADRCard(chunk);
-    case "checkpoint":
-      return [createDivider(`checkpoint - ${chunk.kind2}`)];
-    case "sub_problem":
-      return formatSubProblem(chunk);
-  }
-}
-
-function normalizeHintLevel(value: string | undefined): 1 | 2 | 3 | undefined {
-  if (!value) return undefined;
-  if (value === "1" || value === "2" || value === "3") {
-    return Number(value) as 1 | 2 | 3;
-  }
-  return undefined;
-}
-
-export function parseSlashCommand(input: string): SlashCommand | undefined {
-  const trimmed = input.trim();
-  if (!trimmed.startsWith("/")) {
-    return undefined;
-  }
-
-  const tokens = trimmed.slice(1).split(/\s+/).filter(Boolean);
-  const [command, ...args] = tokens;
-
-  switch (command) {
-    case "help":
-      return { kind: "help" };
-    case "exit":
-    case "quit":
-      return { kind: "exit" };
-    case "mode":
-      if (args[0] === "guided" || args[0] === "standard" || args[0] === "full-socratic") {
-        return { kind: "mode", mode: args[0] };
-      }
-      return { kind: "help" };
-    case "share":
-      if (args.length === 0) return { kind: "help" };
-      return { kind: "share", path: args.join(" ") };
-    case "stuck":
-      return { kind: "stuck" };
-    case "hint": {
-      const level = normalizeHintLevel(args[0]);
-      return level === undefined ? { kind: "hint" } : { kind: "hint", level };
-    }
-    case "trail": {
-      if (args[0] !== "export") return { kind: "help" };
-      const path = args.find((value) => !value.startsWith("--") && value !== "export");
-      const format = args.includes("--format") && args[args.indexOf("--format") + 1] === "pdf" ? "pdf" : "md";
-      return path ? { kind: "trail-export", path, format } : { kind: "trail-export", format };
-    }
-    default:
-      return { kind: "help" };
-  }
-}
-
-export function formatPrompt(mode: Mode): string {
-  return chalk.bold(`struggle [${mode}]`) + chalk.dim(" > ");
-}
-
-function nextHintLevel(current: 1 | 2 | 3): 1 | 2 | 3 {
-  return current === 1 ? 2 : current === 2 ? 3 : 3;
-}
-
-function syncHintState(session: Session, state: ReplState): void {
-  if (session.state.activeMilestone !== state.lastMilestone) {
-    state.lastMilestone = session.state.activeMilestone;
-    state.hintLevel = 1;
-  }
-}
-
-function defaultTrailPath(projectPath: string, session: Session, format: "md" | "pdf"): string {
-  const suffix = format === "pdf" ? "pdf" : "md";
-  return join(projectPath, ".struggle-ai", `trail-${session.state.id}.${suffix}`);
-}
-
-async function streamChunks(
-  iterable: AsyncIterable<ResponseChunk>,
-  onChunk: (chunk: ResponseChunk) => void
-): Promise<void> {
-  for await (const chunk of iterable) {
-    onChunk(chunk);
-  }
-}
-
-export async function handleSlashCommand(
-  command: SlashCommand,
-  session: Session,
-  projectPath: string,
-  replState: ReplState,
-  writeLine: (value: string) => void,
-  writeLines: (values: string[]) => void
-): Promise<"continue" | "exit"> {
-  switch (command.kind) {
-    case "help":
-      writeLines(HELP_TEXT.split("\n"));
-      return "continue";
-    case "exit":
-      return "exit";
-    case "mode":
-      session.setMode(command.mode);
-      syncHintState(session, replState);
-      writeLine(`${chalk.cyan("mode")} ${command.mode}`);
-      return "continue";
-    case "share": {
-      const resolved = resolve(projectPath, command.path);
-      await session.shareFile(resolved);
-      writeLine(`${chalk.cyan("shared")} ${resolved}`);
-      return "continue";
-    }
-    case "stuck":
-      await streamChunks(session.invokeStuck(), (chunk) => writeLines(formatChunk(chunk)));
-      syncHintState(session, replState);
-      return "continue";
-    case "hint": {
-      const level = command.level ?? replState.hintLevel;
-      await streamChunks(session.invokeHint(level), (chunk) => writeLines(formatChunk(chunk)));
-      replState.hintLevel = command.level ?? nextHintLevel(level);
-      syncHintState(session, replState);
-      return "continue";
-    }
-    case "trail-export": {
-      const outputPath = command.path
-        ? resolve(projectPath, command.path)
-        : defaultTrailPath(projectPath, session, command.format);
-      await session.exportTrail(outputPath, command.format);
-      writeLine(`${chalk.cyan("trail")} ${outputPath}`);
-      return "continue";
-    }
-  }
-}
-
-type LogKind = "system" | "user" | "assistant" | "error";
-
-interface LogEntry {
-  kind: LogKind;
-  lines: string[];
-}
-
-class ReplScreen {
-  private _focused = false;
-  private readonly entries: LogEntry[] = [];
-  private readonly input = new Input();
-  private mode: Mode;
-  private activeSubProblem: string | undefined;
-  private busy = false;
-  private footer = chalk.dim("Enter to send, Ctrl+C to quit, /help for commands");
-  private readonly onSubmitInput: (value: string) => void;
-
-  constructor(mode: Mode, onSubmitInput: (value: string) => void) {
-    this.mode = mode;
-    this.onSubmitInput = onSubmitInput;
-    this.input.onSubmit = (value) => {
-      if (this.busy) {
-        return;
-      }
-      this.onSubmitInput(value);
-    };
-  }
-
-  get focused(): boolean {
-    return this._focused;
-  }
-
-  set focused(value: boolean) {
-    this._focused = value;
-    this.input.focused = value;
-  }
-
-  setBusy(value: boolean): void {
-    this.busy = value;
-    this.footer = value
-      ? chalk.dim("Working... submit is temporarily paused")
-      : chalk.dim("Enter to send, Ctrl+C to quit, /help for commands");
-  }
-
-  setMode(mode: Mode): void {
-    this.mode = mode;
-  }
-
-  setActiveSubProblem(value: string | undefined): void {
-    this.activeSubProblem = value;
-  }
-
-  clearInput(): void {
-    this.input.setValue("");
-  }
-
-  append(kind: LogKind, ...lines: string[]): void {
-    const normalized = lines
-      .flatMap((line) => line.split("\n"))
-      .filter((line, index, all) => line.length > 0 || index < all.length - 1);
-    this.entries.push({ kind, lines: normalized.length > 0 ? normalized : [""] });
-  }
-
-  handleInput(data: string): void {
-    this.input.handleInput(data);
-  }
-
-  invalidate(): void {
-    this.input.invalidate();
-  }
-
-  render(width: number): string[] {
-    const safeWidth = Math.max(48, width);
-    const lines: string[] = [];
-    const title = truncateToWidth(`${chalk.bold("Struggle AI")} ${chalk.dim("Interactive CLI")}`, safeWidth - 16);
-    const headerLine = padAnsi(title, Math.max(10, safeWidth - visibleWidth(modeBadge(this.mode)) - 1));
-    lines.push(chalk.bgHex("#0F172A").white(`${headerLine} ${modeBadge(this.mode)}`));
-    lines.push(
-      chalk.bgHex("#E2E8F0").hex("#0F172A")(padAnsi(` Session ready${this.busy ? " - responding" : ""}`, safeWidth))
-    );
-    lines.push("");
-
-    lines.push(
-      ...frameSection(
-        "Context",
-        [this.activeSubProblem ? chalk.gray(this.activeSubProblem) : chalk.gray("No active guided question yet.")],
-        safeWidth
-      )
-    );
-    lines.push("");
-
-    const transcriptLines = this.entries.flatMap((entry) => {
-      const role =
-        entry.kind === "user"
-          ? chalk.cyan.bold("YOU")
-          : entry.kind === "assistant"
-            ? chalk.green.bold("STRUGGLE")
-            : entry.kind === "error"
-              ? chalk.red.bold("ERROR")
-              : chalk.gray.bold("SYSTEM");
-      const style = toneByKind(entry.kind);
-      const body = entry.lines.length > 0 ? entry.lines : [""];
-      return body
-        .map((line, index) => {
-          const prefix = index === 0 ? `${role}  ` : "     ";
-          return style ? `${prefix}${style(line)}` : `${prefix}${line}`;
-        })
-        .concat("");
-    });
-
-    lines.push(
-      ...frameSection(
-        "Transcript",
-        transcriptLines.length > 0 ? transcriptLines : [chalk.gray("No messages yet.")],
-        safeWidth
-      )
-    );
-    lines.push("");
-
-    const composerWidth = Math.max(12, safeWidth - 4);
-    const promptLine = truncateToWidth(chalk.bold("Prompt") + chalk.dim(`  ${formatPrompt(this.mode)}`), composerWidth);
-    const inputLines = this.input.render(composerWidth);
-    lines.push(
-      ...frameSection(
-        "Composer",
-        [
-          chalk.gray(this.footer),
-          "",
-          promptLine,
-          ...(inputLines.length > 0 ? inputLines : [this.focused ? CURSOR_MARKER : ""]),
-        ],
-        safeWidth
-      )
-    );
-
-    return lines;
-  }
-}
-
-function createTuiIO(base: IO, writeLine: (value: string) => void): IO {
-  return {
-    ...base,
-    notify(level, message) {
-      const prefix =
-        level === "info" ? chalk.cyan("[info]") : level === "warn" ? chalk.yellow("[warn]") : chalk.red("[error]");
-      writeLine(`${prefix} ${message}`);
-    },
-    stream() {
-      // Response chunks are rendered through the REPL event loop to avoid duplicate output.
-    },
-  };
-}
 
 async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> {
   const projectPath = options.projectPath ?? process.cwd();
@@ -427,21 +25,19 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
     output: options.output ?? process.stdout,
   });
 
-  process.stdout.write(`${chalk.bold("Struggle AI")} ${chalk.dim("interactive mode")}\n`);
-  process.stdout.write(`${chalk.dim("Type /help for commands.")}\n`);
+  process.stdout.write(chalk.hex(P.textPrimary).bold("Struggle AI") + chalk.hex(P.textMuted)("  interactive\n"));
+  process.stdout.write(chalk.hex(P.textMuted)("type /help for commands\n\n"));
 
   try {
     while (true) {
       const active = session.state.activeSubProblem;
       if (active) {
-        process.stdout.write(`${chalk.dim(`Context: ${active}`)}\n`);
+        process.stdout.write(chalk.hex(P.textMuted)(`context  ${active}\n`));
       }
 
       const input = await rl.question(formatPrompt(session.state.mode));
       const trimmed = input.trim();
-      if (!trimmed) {
-        continue;
-      }
+      if (!trimmed) continue;
 
       try {
         const command = parseSlashCommand(trimmed);
@@ -453,17 +49,14 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
             replState,
             (line) => process.stdout.write(`${line}\n`),
             (values) => {
-              for (const value of values) {
-                process.stdout.write(`${value}\n`);
-              }
+              for (const v of values) process.stdout.write(`${v}\n`);
             }
           );
-          if (status === "exit") {
-            break;
-          }
+          if (status === "exit") break;
           continue;
         }
 
+        process.stdout.write(chalk.hex(P.textMuted)("  ◌  thinking…\r"));
         await streamChunks(session.sendMessage(trimmed), (chunk) => {
           for (const line of formatChunk(chunk)) {
             process.stdout.write(`${line}\n`);
@@ -501,14 +94,12 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
 
   const projectPath = options.projectPath ?? process.cwd();
   const baseIO = options.io ?? cliIO;
-  const entries: string[] = [];
+  const pending: string[] = [];
   const writeLine = (value: string) => {
-    entries.push(value);
+    pending.push(value);
   };
   const writeLines = (values: string[]) => {
-    for (const value of values) {
-      writeLine(value);
-    }
+    for (const v of values) writeLine(v);
   };
 
   const io = createTuiIO(baseIO, writeLine);
@@ -520,26 +111,63 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
 
   const terminal = new ProcessTerminal();
   const tui = new TUI(terminal);
+  let commandMenuOpen = false;
 
   let resolveExit: (() => void) | undefined;
   const exited = new Promise<void>((resolve) => {
     resolveExit = resolve;
   });
 
-  const screen = new ReplScreen(session.state.mode, (value) => {
+  const modelLabel = options.config ? `${options.config.provider}/${options.config.model}` : "default model";
+
+  const screen = new ReplScreen(session.state.mode, projectPath, modelLabel, (value) => {
     void submitValue(value);
   });
 
-  for (const line of entries) {
-    screen.append("system", line);
-  }
-  screen.append("system", "Type /help for commands.");
+  for (const line of pending.splice(0)) screen.append("system", line);
+  screen.append("system", "type /help for commands");
+
   tui.addChild(screen);
   tui.setFocus(screen);
 
   const close = () => {
     tui.stop();
     resolveExit?.();
+  };
+
+  const openCommandMenu = () => {
+    if (commandMenuOpen) return;
+    commandMenuOpen = true;
+
+    const overlay = tui.showOverlay(
+      new CommandMenu(
+        (item) => {
+          overlay.hide();
+          commandMenuOpen = false;
+          tui.setFocus(screen);
+
+          const selfExecuting = new Set(["/exit", "/stuck", "/hint", "/hint 2", "/hint 3", "/trail export"]);
+          if (selfExecuting.has(item.value) || item.value.startsWith("/mode ")) {
+            void submitValue(item.value);
+            return;
+          }
+          screen.setInputValue(item.value);
+          tui.requestRender();
+        },
+        () => {
+          overlay.hide();
+          commandMenuOpen = false;
+          tui.setFocus(screen);
+          tui.requestRender();
+        }
+      ),
+      {
+        width: "100%",
+        minWidth: 50,
+        maxHeight: 18,
+        anchor: "bottom-center",
+      }
+    );
   };
 
   const refreshSessionState = () => {
@@ -549,10 +177,8 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
     tui.requestRender();
   };
 
-  const flushPendingEntries = () => {
-    for (const line of entries.splice(0)) {
-      screen.append("system", line);
-    }
+  const flushPending = () => {
+    for (const line of pending.splice(0)) screen.append("system", line);
   };
 
   const submitValue = async (value: string) => {
@@ -571,27 +197,51 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
     try {
       const command = parseSlashCommand(trimmed);
       if (command) {
+        if (command.kind === "help") {
+          openCommandMenu();
+          return;
+        }
         const status = await handleSlashCommand(command, session, projectPath, replState, writeLine, writeLines);
-        flushPendingEntries();
+        flushPending();
         refreshSessionState();
         if (status === "exit") {
           close();
           return;
         }
       } else {
+        screen.startThinking(() => tui.requestRender());
+        tui.requestRender();
+
+        let firstChunk = true;
+
         await streamChunks(session.sendMessage(trimmed), (chunk) => {
-          screen.append("assistant", ...formatChunk(chunk));
+          if (firstChunk) {
+            firstChunk = false;
+            screen.stopThinking();
+            screen.startStreaming(() => tui.requestRender());
+          }
+
+          const chunkLines = formatChunk(chunk);
+          screen.appendStreamChunk(chunkLines.join("\n"));
           tui.requestRender();
         });
+
+        if (firstChunk) {
+          screen.stopThinking();
+        }
+        screen.stopStreaming();
+
         syncHintState(session, replState);
         refreshSessionState();
       }
     } catch (error) {
+      screen.stopThinking();
+      screen.stopStreaming();
       const message = error instanceof Error ? error.message : "Unknown REPL error";
       screen.append("error", message);
     } finally {
       screen.setBusy(false);
-      flushPendingEntries();
+      flushPending();
       refreshSessionState();
     }
   };
@@ -613,4 +263,4 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
   }
 }
 
-export { HELP_TEXT };
+export { HELP_TEXT, formatPrompt, parseSlashCommand };
