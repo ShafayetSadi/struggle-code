@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { realpathSync } from "node:fs";
-import { createInterface } from "node:readline/promises";
+import { type Interface, createInterface } from "node:readline/promises";
 import { pathToFileURL } from "node:url";
 
 import { getModels, loginAntigravity, loginOpenAICodex } from "@mariozechner/pi-ai";
@@ -11,25 +11,13 @@ import {
   AUTH_PATH,
   CONFIG_PATH,
   OAUTH_PROVIDERS,
-  attachRuntimeAuth,
   clearSavedAuth,
   getCurrentConfig,
-  readAuthStore,
-  readConfigFile,
   saveOAuthCredentials,
   writeConfigFile,
 } from "./configStore.js";
 import { cliIO } from "./ioImpl.js";
-import { runRepl } from "./repl.js";
-
-const STARTUP_PROVIDERS: Provider[] = [
-  "openai-codex",
-  "google-antigravity",
-  "openrouter",
-  "anthropic",
-  "openai",
-  "google",
-];
+import { HELP_TEXT, formatPrompt, parseSlashCommand, runRepl } from "./repl.js";
 
 function isSupportedProvider(value: string): value is Provider {
   return value in DEFAULT_CONFIGS;
@@ -42,221 +30,84 @@ function parseProviderOrThrow(value: string): Provider {
   return value;
 }
 
-function resolveProviderModels(provider: Provider) {
-  return getModels(provider);
-}
-
-function providerUsesOAuth(provider: Provider): boolean {
-  return OAUTH_PROVIDERS.has(provider);
-}
-
-function getProviderLabel(provider: Provider): string {
-  switch (provider) {
-    case "openai-codex":
-      return "OpenAI Codex";
-    case "google-antigravity":
-      return "Antigravity";
-    case "openrouter":
-      return "OpenRouter";
-    case "anthropic":
-      return "Anthropic";
-    case "openai":
-      return "OpenAI";
-    case "google":
-      return "Google";
-  }
-}
-
-function assertKnownModel(provider: Provider, modelId: string): void {
-  const exists = resolveProviderModels(provider).some((model) => model.id === modelId);
-  if (!exists) {
-    throw new InvalidArgumentError(`Unknown model for ${provider}: ${modelId}`);
-  }
-}
-
 function buildProviderConfig(provider: Provider, model?: string): ProviderConfig {
   const base = DEFAULT_CONFIGS[provider];
-  const nextModel = model ?? base.model;
-  assertKnownModel(provider, nextModel);
   return {
     ...base,
-    model: nextModel,
+    model: model ?? base.model,
   };
 }
 
-function hasUsableProviderAccess(config: ProviderConfig): boolean {
-  if (config.auth?.type === "api-key") {
-    return config.auth.apiKey.length > 0;
-  }
+type ProviderModel = { id: string };
 
-  if (config.auth?.type === "oauth") {
-    return true;
-  }
-
-  if (process.env[config.apiKeyEnv]) {
-    return true;
-  }
-
-  return config.provider === "google" && Boolean(process.env.GEMINI_API_KEY);
-}
-
-export async function resolveRunConfig(options: {
-  provider?: string;
-  model?: string;
-}): Promise<ProviderConfig> {
-  const current = await getCurrentConfig();
-  const provider = options.provider ? parseProviderOrThrow(options.provider) : current.provider;
-  const model = options.model ?? (provider === current.provider ? current.model : undefined);
-  const base = buildProviderConfig(provider, model);
-
-  if (provider !== current.provider) {
-    return attachRuntimeAuth(base, await readAuthStore());
-  }
-
-  return {
-    ...current,
-    provider,
-    model: base.model,
-    apiKeyEnv: base.apiKeyEnv,
-  };
+function resolveProviderModels(provider: Provider): ProviderModel[] {
+  return getModels(provider) as ProviderModel[];
 }
 
 async function runOAuthLogin(provider: Provider): Promise<void> {
   if (!OAUTH_PROVIDERS.has(provider)) {
-    throw new Error(`Provider ${provider} uses API keys, not account login`);
+    throw new InvalidArgumentError(`Provider does not support OAuth login: ${provider}`);
   }
 
-  const prompt = async (message: string): Promise<string> => {
-    process.stdout.write(`${message} `);
-    process.stdin.resume();
-    process.stdin.setEncoding("utf8");
-
-    return await new Promise<string>((resolve, reject) => {
-      const onData = (value: string) => {
-        cleanup();
-        resolve(value.trim());
-      };
-      const onError = (error: Error) => {
-        cleanup();
-        reject(error);
-      };
-      const cleanup = () => {
-        process.stdin.pause();
-        process.stdin.off("data", onData);
-        process.stdin.off("error", onError);
-      };
-
-      process.stdin.once("data", onData);
-      process.stdin.once("error", onError);
-    });
-  };
-
-  const onAuth = (info: { url: string; instructions?: string }) => {
-    process.stdout.write(`Open this URL in your browser:\n${info.url}\n`);
-    if (info.instructions) {
-      process.stdout.write(`${info.instructions}\n`);
-    }
-  };
-  const onProgress = (message: string) => {
-    process.stdout.write(`${message}\n`);
-  };
-
-  const credentials =
-    provider === "openai-codex"
-      ? await loginOpenAICodex({
-          onAuth,
-          onProgress,
-          onPrompt: async (oauthPrompt) => prompt(oauthPrompt.message),
-        })
-      : await loginAntigravity(onAuth, onProgress, async () => prompt("Paste the redirect URL after account login:"));
-
-  await saveOAuthCredentials(provider, credentials);
-  process.stdout.write(`Saved account credentials to ${AUTH_PATH}\n`);
-}
-
-async function promptText(question: string): Promise<string> {
-  const rl = createInterface({
+  const rl: Interface = createInterface({
     input: process.stdin,
     output: process.stdout,
   });
 
+  const onAuth = (info: { url: string; instructions?: string }) => {
+    process.stdout.write(`Open this URL to continue authentication:\n${info.url}\n`);
+    if (info.instructions) {
+      process.stdout.write(`${info.instructions}\n`);
+    }
+  };
+
+  const onProgress = (message: string) => {
+    process.stdout.write(`${message}\n`);
+  };
+
+  const onManualCodeInput = async (): Promise<string> => {
+    return rl.question("Paste the redirected URL/code and press Enter: ");
+  };
+
   try {
-    return (await rl.question(question)).trim();
+    if (provider === "openai-codex") {
+      const credentials = await loginOpenAICodex({
+        onAuth,
+        onProgress,
+        onManualCodeInput,
+        onPrompt: async (prompt) => {
+          let message = "Enter value";
+          if (typeof prompt === "string") {
+            message = prompt;
+          } else if ("message" in prompt && typeof prompt.message === "string") {
+            message = prompt.message;
+          }
+          return rl.question(`${message}: `);
+        },
+      });
+      await saveOAuthCredentials(provider, credentials);
+      process.stdout.write(`Saved OAuth credentials to ${AUTH_PATH}\n`);
+      return;
+    }
+
+    if (provider === "google-antigravity") {
+      const credentials = await loginAntigravity(onAuth, onProgress, onManualCodeInput);
+      await saveOAuthCredentials(provider, credentials);
+      process.stdout.write(`Saved OAuth credentials to ${AUTH_PATH}\n`);
+      return;
+    }
+
+    throw new InvalidArgumentError(`OAuth login is not implemented for ${provider}`);
   } finally {
     rl.close();
   }
 }
 
-async function chooseProviderInteractively(): Promise<Provider> {
-  process.stdout.write("Choose a provider to continue:\n");
-  STARTUP_PROVIDERS.forEach((provider, index) => {
-    process.stdout.write(`  ${index + 1}. ${getProviderLabel(provider)}\n`);
-  });
-
-  while (true) {
-    const answer = await promptText(`Enter number (1-${STARTUP_PROVIDERS.length}): `);
-    const choice = Number.parseInt(answer, 10);
-    if (Number.isInteger(choice) && choice >= 1 && choice <= STARTUP_PROVIDERS.length) {
-      return STARTUP_PROVIDERS[choice - 1] as Provider;
-    }
-    process.stdout.write("Invalid selection.\n");
-  }
-}
-
-async function promptForApiKey(provider: Provider): Promise<string> {
-  while (true) {
-    const apiKey = await promptText(`${getProviderLabel(provider)} API key: `);
-    if (apiKey) {
-      return apiKey;
-    }
-    process.stdout.write("API key cannot be empty.\n");
-  }
-}
-
-async function runInteractiveSetup(requestedProvider?: Provider): Promise<ProviderConfig> {
-  const provider = requestedProvider ?? (await chooseProviderInteractively());
-  const config = buildProviderConfig(provider);
-
-  if (providerUsesOAuth(provider)) {
-    await runOAuthLogin(provider);
-    await writeConfigFile(CONFIG_PATH, config);
-    return await getCurrentConfig();
-  }
-
-  const apiKey = await promptForApiKey(provider);
-  const configured: ProviderConfig = {
-    ...config,
-    auth: {
-      type: "api-key",
-      apiKey,
-    },
-  };
-  await writeConfigFile(CONFIG_PATH, configured);
-  process.stdout.write(`Saved provider config to ${CONFIG_PATH}\n`);
-  return configured;
-}
-
 export async function ensureReadyConfig(options: { provider?: string; model?: string } = {}): Promise<ProviderConfig> {
-  const resolved = await resolveRunConfig(options);
-  if (hasUsableProviderAccess(resolved)) {
-    return resolved;
-  }
-
-  const hasSavedConfig = Boolean(await readConfigFile(CONFIG_PATH));
-
-  if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    throw new Error(
-      `No usable credentials for ${resolved.provider}. Run struggle config login ${resolved.provider} or configure ${resolved.apiKeyEnv}.`
-    );
-  }
-
-  if (!hasSavedConfig && !options.provider) {
-    process.stdout.write("No saved provider config found.\n");
-    return await runInteractiveSetup();
-  }
-
-  process.stdout.write(`No saved login or API key found for ${getProviderLabel(resolved.provider)}.\n`);
-  return await runInteractiveSetup(resolved.provider);
+  const current = await getCurrentConfig();
+  const provider = options.provider ? parseProviderOrThrow(options.provider) : current.provider;
+  const model = options.model ?? (provider === current.provider ? current.model : undefined);
+  return buildProviderConfig(provider, model);
 }
 
 export function createProgram(): Command {
@@ -307,7 +158,6 @@ export function createProgram(): Command {
             }
           : buildProviderConfig(provider, model);
 
-      assertKnownModel(provider, nextConfig.model);
       await writeConfigFile(CONFIG_PATH, nextConfig);
       process.stdout.write(`Saved model config to ${CONFIG_PATH}\n`);
     });
@@ -387,5 +237,4 @@ if (isDirectExecution()) {
   });
 }
 
-export { cliIO } from "./ioImpl.js";
-export { formatPrompt, HELP_TEXT, parseSlashCommand, runRepl } from "./repl.js";
+export { cliIO, formatPrompt, HELP_TEXT, parseSlashCommand, runRepl };

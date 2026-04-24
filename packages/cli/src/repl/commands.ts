@@ -6,19 +6,31 @@ import { formatChunk } from "./formatting.js";
 import { P, chalk } from "./palette.js";
 import type { ReplState, SlashCommand } from "./types.js";
 
-export const HELP_TEXT = `
-Available commands:
-  /help                     Show this help
+export const ROOT_MENU_TEXT = `
+Commands:
+  /help                     Hints & stuck commands
   /logout                   Clear saved credentials for the active provider
-  /mode <guided|standard|socratic>
-                            Switch learning mode
-  /model [model-id]         Show models or switch the current model
+  /mode                     Show available learning modes
+  /model [model-id]         Show active model or switch models
+  /copy                     Copy the latest generated output
+  /clear                    Clear the transcript
+  /new                      Start a fresh session
   /share <path>             Share a file with the active session
-  /stuck                    Trigger a stuck-session intervention
-  /hint [1|2|3]             Ask for a hint; defaults to the next level
   /trail export [path] [--format md|pdf]
                             Export the learning trail
-  /exit                     Quit the REPL
+`.trim();
+
+export const HELP_TEXT = `
+Help commands:
+  /hint [1|2|3]             Ask for a hint; defaults to the next level
+  /stuck                    Trigger a stuck-session intervention
+`.trim();
+
+export const MODE_MENU_TEXT = `
+Available modes:
+  /mode guided              Guided learning with active nudges
+  /mode standard            Balanced mode (default)
+  /mode socratic            Questions only, no direct answers
 `.trim();
 
 function normalizeHintLevel(value: string | undefined): 1 | 2 | 3 | undefined {
@@ -31,6 +43,7 @@ function normalizeHintLevel(value: string | undefined): 1 | 2 | 3 | undefined {
 export function parseSlashCommand(input: string): SlashCommand | undefined {
   const trimmed = input.trim();
   if (!trimmed.startsWith("/")) return undefined;
+  if (trimmed === "/") return { kind: "root-menu" };
 
   const tokens = trimmed.slice(1).split(/\s+/).filter(Boolean);
   const [command, ...args] = tokens;
@@ -38,20 +51,27 @@ export function parseSlashCommand(input: string): SlashCommand | undefined {
   switch (command) {
     case "help":
       return { kind: "help" };
+    case "clear":
+      return { kind: "clear" };
+    case "copy":
+      return { kind: "copy" };
+    case "new":
+      return { kind: "new" };
     case "exit":
     case "quit":
       return { kind: "exit" };
     case "logout":
       return { kind: "logout" };
-    case "mode":
-      if (args[0] === "guided" || args[0] === "standard" || args[0] === "socratic") {
-        return { kind: "mode", mode: args[0] };
-      }
-      return { kind: "help" };
     case "model":
       return args.length > 0 ? { kind: "model", model: args.join(" ") } : { kind: "model" };
+    case "mode":
+      if (args.length === 0) return { kind: "mode-menu" };
+      if (args[0] === "guided" || args[0] === "standard" || args[0] === "socratic") {
+        return { kind: "mode", mode: args[0] as Mode };
+      }
+      return { kind: "mode-menu" };
     case "share":
-      if (args.length === 0) return { kind: "help" };
+      if (args.length === 0) return { kind: "root-menu" };
       return { kind: "share", path: args.join(" ") };
     case "stuck":
       return { kind: "stuck" };
@@ -60,18 +80,20 @@ export function parseSlashCommand(input: string): SlashCommand | undefined {
       return level === undefined ? { kind: "hint" } : { kind: "hint", level };
     }
     case "trail": {
-      if (args[0] !== "export") return { kind: "help" };
+      if (args[0] !== "export") return { kind: "root-menu" };
       const path = args.find((v) => !v.startsWith("--") && v !== "export");
       const format = args.includes("--format") && args[args.indexOf("--format") + 1] === "pdf" ? "pdf" : "md";
       return path ? { kind: "trail-export", path, format } : { kind: "trail-export", format };
     }
     default:
-      return { kind: "help" };
+      return { kind: "root-menu" };
   }
 }
 
 function nextHintLevel(current: 1 | 2 | 3): 1 | 2 | 3 {
-  return current === 1 ? 2 : current === 2 ? 3 : 3;
+  if (current === 1) return 2;
+  if (current === 2) return 3;
+  return 3;
 }
 
 export function syncHintState(session: Session, state: ReplState): void {
@@ -103,8 +125,23 @@ export async function handleSlashCommand(
   writeLines: (values: string[]) => void
 ): Promise<"continue" | "exit"> {
   switch (command.kind) {
+    case "root-menu":
+      writeLines(ROOT_MENU_TEXT.split("\n"));
+      return "continue";
     case "help":
       writeLines(HELP_TEXT.split("\n"));
+      return "continue";
+    case "mode-menu":
+      writeLines(MODE_MENU_TEXT.split("\n"));
+      return "continue";
+    case "model": {
+      const modelCmd = command as { kind: "model"; model?: string };
+      writeLines(await handleModelCommand(modelCmd.model));
+      return "continue";
+    }
+    case "copy":
+    case "clear":
+    case "new":
       return "continue";
     case "exit":
       return "exit";
@@ -115,9 +152,6 @@ export async function handleSlashCommand(
       session.setMode(command.mode);
       syncHintState(session, replState);
       writeLine(chalk.hex(P.blue)(`mode set to ${command.mode}`));
-      return "continue";
-    case "model":
-      writeLines(await handleModelCommand(command.model));
       return "continue";
     case "share": {
       const resolved = resolve(projectPath, command.path);
