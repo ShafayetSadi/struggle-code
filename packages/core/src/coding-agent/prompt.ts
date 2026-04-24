@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { Mode } from "../types.js";
@@ -28,6 +29,10 @@ function describeMode(mode: Mode): string {
 }
 
 function getModesDocPath(): string {
+  if (typeof __dirname !== "undefined") {
+    return resolve(__dirname, "../../../../docs/modes.md");
+  }
+
   return fileURLToPath(new URL("../../../../docs/modes.md", import.meta.url));
 }
 
