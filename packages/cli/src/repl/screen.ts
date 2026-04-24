@@ -5,8 +5,20 @@ import type { Mode } from "@struggle-ai/core";
 
 import { CURSOR_MARKER, Input, Key, padToWidth, truncateToWidth, visibleWidth, type SelectItem } from "../pi-tui/src/index.js";
 import { commandMatches } from "./commandMenu.js";
-import { BUBBLE_THEMES, P, chalk, formatChunk, modePill, renderBubble, renderThinkingFrame, streamingCursor, wrapAt } from "./formatting.js";
+import { BUBBLE_THEMES, P, chalk, modePill, renderBubble, renderThinkingFrame, streamingCursor, wrapAt } from "./formatting.js";
 import type { LogEntry, LogKind } from "./types.js";
+
+interface CopyTarget {
+  row: number;
+  colStart: number;
+  colEnd: number;
+  text: string;
+}
+
+interface TranscriptLine {
+  text: string;
+  copyTarget?: Omit<CopyTarget, "row">;
+}
 
 export class ReplScreen {
   private _focused = false;
@@ -18,8 +30,10 @@ export class ReplScreen {
   private activeSubProblem: string | undefined;
   private busy = false;
   private commandSelection = 0;
+  private lastCommandQuery = "";
   private transcriptScroll = 0;
   private maxTranscriptScroll = 0;
+  private copyTargets: CopyTarget[] = [];
   private readonly onSubmitInput: (value: string) => void;
 
   private thinking = false;
@@ -78,6 +92,19 @@ export class ReplScreen {
       .flatMap((line) => line.split("\n"))
       .filter((line, i, all) => line.length > 0 || i < all.length - 1);
     this.entries.push({ kind, lines: normalized.length > 0 ? normalized : [""] });
+  }
+
+  getCopyTargetText(row: number, col: number): string | undefined {
+    const target = this.copyTargets.find(
+      (candidate) => candidate.row === row && col >= candidate.colStart && col <= candidate.colEnd
+    );
+    return target?.text;
+  }
+
+  clearEntries(): void {
+    this.entries.length = 0;
+    this.transcriptScroll = 0;
+    this.maxTranscriptScroll = 0;
   }
 
   startThinking(requestRender: () => void): void {
@@ -147,6 +174,20 @@ export class ReplScreen {
         this.applyCommandCompletion(matches[this.commandSelection]);
         return;
       }
+      if (data === Key.enter || data === "\r") {
+        const currentRaw = this.input.getValue();
+        const current = currentRaw.trimEnd().toLowerCase();
+        const selected = matches[this.commandSelection];
+        const selectedValue = selected?.value.trimEnd().toLowerCase();
+        const isSubmenuTrigger = current === "/help" || current === "/mode";
+        const isInsideSubmenu = /\s$/.test(currentRaw);
+
+        if (selected && (isInsideSubmenu || (!isSubmenuTrigger && selectedValue !== current))) {
+          this.input.setValue(selected.value);
+          this.input.handleInput(Key.enter);
+          return;
+        }
+      }
     }
 
     // PageUp → scroll toward older messages
@@ -181,7 +222,11 @@ export class ReplScreen {
 
     this.input.handleInput(data);
     const next = this.getCommandMatches();
-    this.commandSelection = next.length > 0 ? Math.min(this.commandSelection, next.length - 1) : 0;
+    if (next.length > 0) {
+      this.commandSelection = Math.min(this.commandSelection, next.length - 1);
+    } else {
+      this.commandSelection = 0;
+    }
   }
 
   invalidate(): void {
@@ -190,10 +235,12 @@ export class ReplScreen {
 
   render(width: number): string[] {
     const w = Math.max(60, width);
+    const transcriptWidth = Math.max(20, w - 1);
     // Use process.stdout.rows directly — this is the real terminal height the
     // renderer must fill completely so there is no blank space below the UI.
     const termHeight = process.stdout.rows ?? 24;
     const lines: string[] = [];
+    this.copyTargets = [];
 
     // ── Header (3 lines) ────────────────────────────────────────────────────
     const pill = modePill(this.mode);
@@ -225,7 +272,7 @@ export class ReplScreen {
     //   input rows      : inputHeight
     //   footer sep      : 1
     //   info bar        : 1
-    const hintMatches = this.getCommandMatches().slice(0, 4);
+    const hintMatches = this.getCommandMatches();
     const hintHeight = hintMatches.length > 0 ? hintMatches.length + 1 : 0;
     const thinkingHeight = this.thinking ? 3 : 0;
     const busyHeight = this.busy && !this.thinking ? 1 : 0;
@@ -243,37 +290,17 @@ export class ReplScreen {
     const transcriptViewport = Math.max(4, termHeight - 3 - belowTranscript);
 
     // ── Build full transcript line buffer ────────────────────────────────────
-    const transcriptLines: string[] = [];
+    const transcriptLines: TranscriptLine[] = [];
     this.entries.forEach((entry, entryIndex) => {
       const isLastEntry = entryIndex === this.entries.length - 1;
       const isStreamingEntry = this.streaming && isLastEntry && entry.kind === "assistant";
 
       if (!isStreamingEntry) {
-        transcriptLines.push(...renderBubble(entry.kind as "user" | "assistant" | "error" | "system", entry.lines, w));
+        transcriptLines.push(...this.renderTranscriptEntry(entry, transcriptWidth));
         return;
       }
 
-      const theme = BUBBLE_THEMES.assistant;
-      const gutter = 2;
-      const innerWidth = Math.max(16, w - gutter * 2 - 2);
-      const headerIcon = chalk.hex(theme.labelColor).bold(theme.labelIcon);
-      const headerLabel = chalk.hex(theme.labelColor).bold(` ${theme.label}`);
-      const headerContent = `${" ".repeat(gutter)}${headerIcon}${headerLabel}`;
-      transcriptLines.push(chalk.bgHex(theme.bg)(padToWidth(truncateToWidth(headerContent, w), w)));
-
-      const accentBar = chalk.hex(theme.borderLeft)("│");
-      const bodyPad = " ".repeat(gutter);
-      const bodyLines = entry.lines.flatMap((line) => (line.trim() === "" ? [""] : wrapAt(line, innerWidth - 1)));
-
-      bodyLines.forEach((line, lineIndex) => {
-        const isLastLine = lineIndex === bodyLines.length - 1;
-        const cursor = isLastLine ? streamingCursor(this.streamingCursorVisible) : "";
-        const colored = chalk.hex(theme.textColor)(line) + cursor;
-        const raw = `${bodyPad}${accentBar} ${padToWidth(colored, innerWidth)}`;
-        transcriptLines.push(chalk.bgHex(theme.bg)(padToWidth(truncateToWidth(raw, w), w)));
-      });
-
-      transcriptLines.push(chalk.bgHex(theme.bg)(padToWidth("", w)));
+      transcriptLines.push(...this.renderTranscriptEntry(entry, transcriptWidth, { streaming: true }));
     });
 
     // ── Render transcript + scrollbar ────────────────────────────────────────
@@ -299,16 +326,26 @@ export class ReplScreen {
 
       // Pad viewport to exact height so blank lines also get a scrollbar glyph
       for (let i = 0; i < transcriptViewport; i++) {
+        const row = lines.length;
+        const line = visibleSlice[i];
         const isThumb = needsScrollbar && i >= thumbOffset && i < thumbOffset + thumbSize;
         const bar = isThumb
           ? chalk.hex(P.textMuted)("▐")
           : chalk.hex(P.borderSubtle)("╎");
-        const trimmed = truncateToWidth(visibleSlice[i] ?? "", w - 1);
-        lines.push(chalk.bgHex(P.bg)(padToWidth(trimmed, w - 1)) + chalk.bgHex(P.bg)(bar));
+        const trimmed = truncateToWidth(line?.text ?? "", transcriptWidth);
+        lines.push(chalk.bgHex(P.bg)(padToWidth(trimmed, transcriptWidth)) + chalk.bgHex(P.bg)(bar));
+        if (line?.copyTarget) {
+          this.copyTargets.push({
+            row,
+            colStart: line.copyTarget.colStart,
+            colEnd: line.copyTarget.colEnd,
+            text: line.copyTarget.text,
+          });
+        }
       }
     } else if (!this.thinking) {
       // Empty state — fill viewport so input lands at the bottom
-      const emptyMsg = chalk.hex(P.textMuted)("no messages yet  ·  type below or /help");
+      const emptyMsg = chalk.hex(P.textMuted)("no messages yet  ·  type below or /");
       const centered = " ".repeat(Math.max(0, Math.floor((w - visibleWidth(emptyMsg)) / 2))) + emptyMsg;
       lines.push(chalk.bgHex(P.bg)(padToWidth(centered, w)));
       for (let i = 1; i < transcriptViewport; i++) {
@@ -358,8 +395,62 @@ export class ReplScreen {
     return lines;
   }
 
+  private renderTranscriptEntry(
+    entry: LogEntry,
+    width: number,
+    options: { streaming?: boolean } = {}
+  ): TranscriptLine[] {
+    if (entry.kind !== "assistant") {
+      return renderBubble(entry.kind as "user" | "assistant" | "error" | "system", entry.lines, width).map((text) => ({
+        text,
+      }));
+    }
+
+    return this.renderAssistantTranscriptEntry(entry.lines, width, options.streaming === true);
+  }
+
+  private renderAssistantTranscriptEntry(lines: string[], width: number, streaming: boolean): TranscriptLine[] {
+    const theme = BUBBLE_THEMES.assistant;
+    const gutter = 2;
+    const innerWidth = Math.max(16, width - gutter * 2 - 2);
+    const headerIcon = chalk.hex(theme.labelColor).bold(theme.labelIcon);
+    const headerLabel = chalk.hex(theme.labelColor).bold(` ${theme.label}`);
+    const headerContent = `${" ".repeat(gutter)}${headerIcon}${headerLabel}`;
+    const output: TranscriptLine[] = [
+      {
+        text: chalk.bgHex(theme.bg)(padToWidth(truncateToWidth(headerContent, width), width)),
+      },
+    ];
+
+    const accentBar = chalk.hex(theme.borderLeft)("│");
+    const bodyPad = " ".repeat(gutter);
+    const wrapWidth = streaming ? innerWidth - 1 : innerWidth;
+    const bodyLines = lines.flatMap((line) => (line.trim() === "" ? [""] : wrapAt(line, wrapWidth)));
+
+    bodyLines.forEach((line, lineIndex) => {
+      const isLastLine = lineIndex === bodyLines.length - 1;
+      const cursor = streaming && isLastLine ? streamingCursor(this.streamingCursorVisible) : "";
+      const colored = chalk.hex(theme.textColor)(line) + cursor;
+      const raw = `${bodyPad}${accentBar} ${padToWidth(colored, innerWidth)}`;
+      output.push({
+        text: chalk.bgHex(theme.bg)(padToWidth(truncateToWidth(raw, width), width)),
+      });
+    });
+
+    output.push({
+      text: chalk.bgHex(theme.bg)(padToWidth("", width)),
+    });
+    return output;
+  }
+
   private getCommandMatches(): SelectItem[] {
-    return commandMatches(this.input.getValue());
+    const query = this.input.getValue();
+    // Reset selection whenever the query changes so we never point at a stale row
+    if (query !== this.lastCommandQuery) {
+      this.lastCommandQuery = query;
+      this.commandSelection = 0;
+    }
+    return commandMatches(query);
   }
 
   private applyCommandCompletion(item: SelectItem | undefined): void {
@@ -369,7 +460,7 @@ export class ReplScreen {
   }
 
   private renderCommandHints(width: number): string[] {
-    const matches = this.getCommandMatches().slice(0, 4);
+    const matches = this.getCommandMatches();
     if (matches.length === 0) return [];
 
     const labelCol = 20;
@@ -395,3 +486,5 @@ export class ReplScreen {
     return output;
   }
 }
+
+  

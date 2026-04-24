@@ -6,7 +6,13 @@ export interface ReplState {
 }
 
 export type SlashCommand =
+  | { kind: "root-menu" }
   | { kind: "help" }
+  | { kind: "mode-menu" }
+  | { kind: "model" }
+  | { kind: "copy" }
+  | { kind: "clear" }
+  | { kind: "new" }
   | { kind: "exit" }
   | { kind: "mode"; mode: Mode }
   | { kind: "share"; path: string }
