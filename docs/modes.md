@@ -57,12 +57,15 @@ Behavior:
 - Get to the relevant file or command quickly.
 - Keep planning terse and spend most of the effort on implementation.
 - Prefer the smallest correct diff that solves the stated task.
+- For a small file-scoped request, inspect that file first instead of exploring the wider repo.
+- Do not turn routine fixes into environment triage unless the request or a verified blocker requires it.
 - Avoid broad rewrites unless the existing structure clearly forces them.
 - Summarize the outcome in a compact way after finishing.
 
 Verification standard:
 
 - Run the smallest useful validation that demonstrates the result.
+- Avoid installs, venv creation, or dependency checks unless they are necessary to complete the stated task.
 - Do not skip obvious verification, but avoid turning routine tasks into full investigations.
 
 Use standard mode for:

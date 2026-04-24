@@ -192,6 +192,9 @@ describe("coding agent session", () => {
     expect(agent.systemPrompt).toContain(
       "Start by inspecting the relevant code and building a concrete implementation plan before any coding."
     );
+    expect(agent.systemPrompt).toContain(
+      "Do not install packages, create virtual environments, or diagnose unrelated dependencies unless the user asked for environment help or the task is blocked on a confirmed missing dependency."
+    );
 
     session.setMode("socratic");
     expect(agent.thinkingLevel).toBe("high");
