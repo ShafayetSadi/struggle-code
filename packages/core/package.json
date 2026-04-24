@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@sinclair/typebox": "^0.34.41",
     "@mariozechner/pi-agent-core": "^0.44.0",
     "@mariozechner/pi-ai": "^0.44.0",
     "uuid": "^14.0.0",

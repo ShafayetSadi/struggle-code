@@ -1,6 +1,16 @@
 import { v4 as uuidv4 } from "uuid";
 
-import type { Intent, Mode, SessionState, TrailEntry, TrailEntryType } from "../types.js";
+import type {
+  ImplementationPlan,
+  Intent,
+  Mode,
+  SessionState,
+  TrailEntry,
+  TrailEntryType,
+  ValidationQuestion,
+} from "../types.js";
+
+export type ModePhase = "idle" | "planning" | "awaiting-approval" | "awaiting-validation" | "executing" | "verifying";
 
 export interface ModeHistoryEntry {
   mode: Mode;
@@ -18,6 +28,7 @@ export interface MilestoneRecord {
 
 export interface GuidedRuntimeState {
   topic: string;
+  questions: Array<{ category: string; question: string }>;
   questionIndex: number;
   answers: Array<{ category: string; question: string; answer: string }>;
   briefPath?: string;
@@ -60,6 +71,17 @@ export interface RuntimeSessionContext {
   socratic: SocraticRuntimeState | undefined;
 }
 
+export interface PendingModePlan {
+  mode: "guided" | "full-socratic";
+  intent: Intent;
+  request: string;
+  plan: ImplementationPlan;
+  validationQuestions: ValidationQuestion[];
+  attempts: number;
+  currentPhaseIndex: number;
+  validationPassed: boolean;
+}
+
 export function now(): string {
   return new Date().toISOString();
 }
@@ -76,6 +98,7 @@ export function createInitialState(projectPath: string): SessionState {
     sharedFiles: [],
     createdAt,
     lastActive: createdAt,
+    modePhase: "idle",
   };
 }
 
@@ -97,10 +120,11 @@ export function touchState(state: SessionState): void {
 export function deriveDisplayState(state: SessionState, runtime: RuntimeSessionContext): void {
   if (runtime.guided) {
     const milestone = runtime.guided.milestones[runtime.guided.activeMilestoneIndex];
+    const totalQuestions = Math.max(1, runtime.guided.questions.length);
     state.activeMilestone = milestone?.title ?? "Design interview";
     state.activeSubProblem =
       runtime.guided.awaiting === "design_answer"
-        ? `Design question ${Math.min(runtime.guided.questionIndex + 1, 5)} of 5`
+        ? `Design question ${Math.min(runtime.guided.questionIndex + 1, totalQuestions)} of ${totalQuestions}`
         : runtime.guided.awaiting === "checkpoint" || runtime.guided.awaiting === "probe"
           ? "Explain the milestone back before moving on"
           : "Guided flow ready for the next milestone";

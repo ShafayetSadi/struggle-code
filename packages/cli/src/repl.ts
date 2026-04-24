@@ -6,7 +6,7 @@ import { copyToClipboard } from "./repl/clipboard.js";
 import { HELP_TEXT, ROOT_MENU_TEXT, handleSlashCommand, parseSlashCommand, streamChunks, syncHintState } from "./repl/commands.js";
 import { formatChunk, formatPrompt, P, chalk } from "./repl/formatting.js";
 import { createTuiIO } from "./repl/io.js";
-import { ProcessTerminal, TUI, Key } from "./pi-tui/src/index.js";
+import { Key, ProcessTerminal, TUI } from "./pi-tui/src/index.js";
 import { ReplScreen } from "./repl/screen.js";
 import type { ReplState } from "./repl/types.js";
 import { cliIO } from "./ioImpl.js";

@@ -1,12 +1,45 @@
-.codex
-.pi-lens
+# dependencies
 node_modules/
+
+# build outputs
 dist/
+out/
 .next/
+
+# VS Code extension
 *.vsix
-.DS_Store
+
+# TypeScript
+*.tsbuildinfo
+
+# environment variables
 .env
 .env.*
-*.tsbuildinfo
-coverage/
+!.env.example
 
+# logs
+*.log
+npm-debug.log*
+yarn-error.log
+
+# test coverage
+coverage/
+.vitest/
+
+# deployment
+.vercel
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# editors
+.idea/
+*.swp
+*.swo
+
+# project-specific
+.codex
+.pi-lens
+cache-docs/
