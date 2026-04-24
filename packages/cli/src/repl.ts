@@ -1,7 +1,7 @@
 import { join, resolve } from "node:path";
 import { type Interface, createInterface } from "node:readline/promises";
 
-import { CURSOR_MARKER, Input, Key, ProcessTerminal, TUI, truncateToWidth, wrapTextWithAnsi } from "@mariozechner/pi-tui";
+import { CURSOR_MARKER, Input, Key, ProcessTerminal, TUI, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@mariozechner/pi-tui";
 import chalk from "chalk";
 
 import {
@@ -44,6 +44,37 @@ Available commands:
 
 function createDivider(label: string): string {
   return `${chalk.dim("=".repeat(14))} ${chalk.bold(label)} ${chalk.dim("=".repeat(14))}`;
+}
+
+function padAnsi(text: string, width: number): string {
+  return text + " ".repeat(Math.max(0, width - visibleWidth(text)));
+}
+
+function frameSection(title: string, lines: string[], width: number): string[] {
+  const innerWidth = Math.max(12, width - 4);
+  const top = chalk.dim(`+${"-".repeat(innerWidth + 2)}+`);
+  const label = ` ${title.toUpperCase()} `;
+  const headerFill = Math.max(0, innerWidth - label.length);
+  const header = chalk.dim(`|`) + chalk.bold(label) + chalk.dim(`${"-".repeat(headerFill)}|`);
+  const body = (lines.length > 0 ? lines : [""]).flatMap((line) => {
+    const wrapped = wrapTextWithAnsi(line, innerWidth);
+    return (wrapped.length > 0 ? wrapped : [""]).map((wrappedLine) => chalk.dim("| ") + padAnsi(wrappedLine, innerWidth) + chalk.dim(" |"));
+  });
+  return [top, header, ...body, top];
+}
+
+function modeBadge(mode: Mode): string {
+  const label = ` ${mode.toUpperCase()} `;
+  if (mode === "guided") return chalk.bgCyan.black(label);
+  if (mode === "standard") return chalk.bgYellow.black(label);
+  return chalk.bgMagenta.white(label);
+}
+
+function toneByKind(kind: LogKind): ((value: string) => string) | undefined {
+  if (kind === "user") return chalk.cyan;
+  if (kind === "error") return chalk.red;
+  if (kind === "system") return chalk.gray;
+  return undefined;
 }
 
 function formatCodeBlock(language: string, value: string): string[] {
@@ -288,43 +319,53 @@ class ReplScreen {
   }
 
   render(width: number): string[] {
-    const safeWidth = Math.max(20, width);
+    const safeWidth = Math.max(48, width);
     const lines: string[] = [];
-
-    lines.push(truncateToWidth(chalk.bold("Struggle AI") + chalk.dim(" interactive mode"), safeWidth));
-    lines.push(truncateToWidth(chalk.dim(`Mode: ${this.mode}`), safeWidth));
-
-    if (this.activeSubProblem) {
-      lines.push(...wrapTextWithAnsi(chalk.dim(`Context: ${this.activeSubProblem}`), safeWidth));
-    }
-
+    const title = truncateToWidth(chalk.bold("Struggle AI") + " " + chalk.dim("Interactive CLI"), safeWidth - 16);
+    const headerLine = padAnsi(title, Math.max(10, safeWidth - visibleWidth(modeBadge(this.mode)) - 1));
+    lines.push(chalk.bgHex("#0F172A").white(headerLine + " " + modeBadge(this.mode)));
+    lines.push(chalk.bgHex("#E2E8F0").hex("#0F172A")(padAnsi(` Session ready${this.busy ? " - responding" : ""}`, safeWidth)));
     lines.push("");
 
-    for (const entry of this.entries) {
-      const prefix =
+    lines.push(
+      ...frameSection(
+        "Context",
+        [this.activeSubProblem ? chalk.gray(this.activeSubProblem) : chalk.gray("No active guided question yet.")],
+        safeWidth
+      )
+    );
+    lines.push("");
+
+    const transcriptLines = this.entries.flatMap((entry) => {
+      const role =
         entry.kind === "user"
-          ? chalk.cyan("> ")
-          : entry.kind === "error"
-            ? chalk.red("! ")
-            : entry.kind === "system"
-              ? chalk.dim("- ")
-              : "";
+          ? chalk.cyan.bold("YOU")
+          : entry.kind === "assistant"
+            ? chalk.green.bold("STRUGGLE")
+            : entry.kind === "error"
+              ? chalk.red.bold("ERROR")
+              : chalk.gray.bold("SYSTEM");
+      const style = toneByKind(entry.kind);
+      const body = entry.lines.length > 0 ? entry.lines : [""];
+      return body.map((line, index) => {
+        const prefix = index === 0 ? `${role}  ` : "     ";
+        return style ? `${prefix}${style(line)}` : `${prefix}${line}`;
+      }).concat("");
+    });
 
-      entry.lines.forEach((line, index) => {
-        const content = index === 0 ? `${prefix}${line}` : line;
-        const wrapped = wrapTextWithAnsi(content, safeWidth);
-        lines.push(...(wrapped.length > 0 ? wrapped : [""]));
-      });
-      lines.push("");
-    }
+    lines.push(...frameSection("Transcript", transcriptLines.length > 0 ? transcriptLines : [chalk.gray("No messages yet.")], safeWidth));
+    lines.push("");
 
-    lines.push(createDivider("input"));
-    lines.push(...wrapTextWithAnsi(this.footer, safeWidth));
-
-    const inputPrompt = truncateToWidth(formatPrompt(this.mode), safeWidth);
-    lines.push(inputPrompt);
-    const inputLines = this.input.render(safeWidth);
-    lines.push(...(inputLines.length > 0 ? inputLines : [this.focused ? CURSOR_MARKER : ""]));
+    const composerWidth = Math.max(12, safeWidth - 4);
+    const promptLine = truncateToWidth(chalk.bold("Prompt") + chalk.dim(`  ${formatPrompt(this.mode)}`), composerWidth);
+    const inputLines = this.input.render(composerWidth);
+    lines.push(
+      ...frameSection(
+        "Composer",
+        [chalk.gray(this.footer), "", promptLine, ...(inputLines.length > 0 ? inputLines : [this.focused ? CURSOR_MARKER : ""])],
+        safeWidth
+      )
+    );
 
     return lines;
   }
