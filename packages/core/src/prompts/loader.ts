@@ -22,26 +22,52 @@ export type PromptName =
   | "hint-L3.md";
 
 function bundledPromptPath(name: PromptName): string {
-  return fileURLToPath(new URL(`./${name}`, import.meta.url));
+  return resolve(getCurrentDir(), name);
 }
 
 function sourcePromptPath(name: PromptName): string {
-  const currentDir = dirname(fileURLToPath(import.meta.url));
+  const currentDir = getCurrentDir();
   if (currentDir.includes(`${sep}dist${sep}prompts`)) {
     return resolve(currentDir, "../../src/prompts", name);
   }
   return resolve(currentDir, name);
 }
 
+function getCurrentDir(): string {
+  if (typeof __dirname !== "undefined") {
+    return __dirname;
+  }
+
+  return dirname(fileURLToPath(import.meta.url));
+}
+
+function safeBundledPromptPath(name: PromptName): string | undefined {
+  try {
+    return bundledPromptPath(name);
+  } catch {
+    return undefined;
+  }
+}
+
+function safeSourcePromptPath(name: PromptName): string | undefined {
+  try {
+    return sourcePromptPath(name);
+  } catch {
+    return undefined;
+  }
+}
+
 export async function loadPrompt(name: PromptName, io?: IO, overridePath?: string): Promise<string> {
+  const bundledPath = safeBundledPromptPath(name);
+  const sourcePath = safeSourcePromptPath(name);
   const candidatePaths = Array.from(
-    new Set([overridePath, bundledPromptPath(name), sourcePromptPath(name)].filter((value): value is string => Boolean(value)))
+    new Set([overridePath, bundledPath, sourcePath].filter((value): value is string => Boolean(value)))
   );
 
   for (const candidatePath of candidatePaths) {
     if (io) {
       try {
-        if (!overridePath && candidatePath === bundledPromptPath(name) && io.fileExists) {
+        if (!overridePath && bundledPath && candidatePath === bundledPath && io.fileExists) {
           const exists = await io.fileExists(candidatePath);
           if (!exists) {
             continue;
