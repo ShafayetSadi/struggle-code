@@ -57,6 +57,7 @@ Login for account-backed providers:
 
 ```bash
 npm exec --workspace packages/cli struggle -- config login openai-codex
+npm exec --workspace packages/cli struggle -- config logout openai-codex
 npm exec --workspace packages/cli struggle -- config set-provider openai-codex
 ```
 
@@ -69,6 +70,7 @@ npm exec --workspace packages/cli struggle -- --provider openrouter --model open
 ## REPL Commands
 
 - `/help` shows every supported slash command
+- `/logout` clears saved credentials for the active provider
 - `/mode <guided|standard|socratic>` switches session mode
 - `/share <path>` adds a file to the active session context
 - `/stuck` triggers a stuck-session intervention

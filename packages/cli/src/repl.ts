@@ -1,11 +1,9 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
 import { type Interface, createInterface } from "node:readline/promises";
 
 import { getModels } from "@mariozechner/pi-ai";
 import { DEFAULT_CONFIGS, type IO, type ProviderConfig, startSession } from "@struggle-ai/core";
 
+import { CONFIG_PATH, clearSavedAuth, writeConfigFile } from "./configStore.js";
 import { cliIO } from "./ioImpl.js";
 import { Key, ProcessTerminal, TUI } from "./pi-tui/src/index.js";
 import { CommandMenu } from "./repl/commandMenu.js";
@@ -16,13 +14,18 @@ import { ModelMenu } from "./repl/modelMenu.js";
 import { ReplScreen } from "./repl/screen.js";
 import type { ReplState } from "./repl/types.js";
 
-const CONFIG_DIR = join(homedir(), ".struggle-ai");
-const CONFIG_PATH = join(CONFIG_DIR, "config.json");
-
-async function writeConfigFile(path: string, config: ProviderConfig): Promise<void> {
-  const { onAuthRefresh: _ignored, ...serializable } = config;
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${JSON.stringify(serializable, null, 2)}\n`, "utf8");
+function stripRuntimeAuth(config: ProviderConfig): ProviderConfig {
+  const nextConfig: ProviderConfig = {
+    ...config,
+    apiKeyEnv: DEFAULT_CONFIGS[config.provider].apiKeyEnv,
+  };
+  if ("auth" in nextConfig) {
+    Reflect.deleteProperty(nextConfig, "auth");
+  }
+  if ("onAuthRefresh" in nextConfig) {
+    Reflect.deleteProperty(nextConfig, "onAuthRefresh");
+  }
+  return nextConfig;
 }
 
 async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> {
@@ -76,12 +79,20 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
             await writeConfigFile(CONFIG_PATH, currentConfig);
             return [`model set to ${currentConfig.provider}/${currentConfig.model}`];
           };
+          const handleLogoutCommand = async (): Promise<string[]> => {
+            const provider = currentConfig.provider;
+            await clearSavedAuth(provider);
+            currentConfig = stripRuntimeAuth(currentConfig);
+            session.setProviderConfig(currentConfig);
+            return [`logged out from ${provider}`];
+          };
           const status = await handleSlashCommand(
             command,
             session,
             projectPath,
             replState,
             handleModelCommand,
+            handleLogoutCommand,
             (line) => process.stdout.write(`${line}\n`),
             (values) => {
               for (const v of values) process.stdout.write(`${v}\n`);
@@ -183,7 +194,7 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
           commandMenuOpen = false;
           tui.setFocus(screen);
 
-          const selfExecuting = new Set(["/exit", "/stuck", "/hint", "/hint 2", "/hint 3", "/trail export"]);
+          const selfExecuting = new Set(["/exit", "/logout", "/stuck", "/hint", "/hint 2", "/hint 3", "/trail export"]);
           if (item.value === "/model") {
             openModelMenu();
             return;
@@ -295,6 +306,13 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
           await writeConfigFile(CONFIG_PATH, currentConfig);
           return [`model set to ${currentConfig.provider}/${currentConfig.model}`];
         };
+        const handleLogoutCommand = async (): Promise<string[]> => {
+          const provider = currentConfig.provider;
+          await clearSavedAuth(provider);
+          currentConfig = stripRuntimeAuth(currentConfig);
+          session.setProviderConfig(currentConfig);
+          return [`logged out from ${provider}`];
+        };
         if (command.kind === "help") {
           openCommandMenu();
           return;
@@ -305,6 +323,7 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
           projectPath,
           replState,
           handleModelCommand,
+          handleLogoutCommand,
           writeLine,
           writeLines
         );

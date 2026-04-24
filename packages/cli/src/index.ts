@@ -1,29 +1,27 @@
 #!/usr/bin/env node
 import { realpathSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { pathToFileURL } from "node:url";
 
 import { getModels, loginAntigravity, loginOpenAICodex } from "@mariozechner/pi-ai";
-import {
-  DEFAULT_CONFIGS,
-  type OAuthCredentials,
-  type Provider,
-  type ProviderAuth,
-  type ProviderConfig,
-  loadConfig,
-} from "@struggle-ai/core";
+import { DEFAULT_CONFIGS, type Provider, type ProviderConfig } from "@struggle-ai/core";
 import { Command, InvalidArgumentError } from "commander";
 
+import {
+  AUTH_PATH,
+  CONFIG_PATH,
+  OAUTH_PROVIDERS,
+  attachRuntimeAuth,
+  clearSavedAuth,
+  getCurrentConfig,
+  readAuthStore,
+  readConfigFile,
+  saveOAuthCredentials,
+  writeConfigFile,
+} from "./configStore.js";
 import { cliIO } from "./ioImpl.js";
 import { runRepl } from "./repl.js";
 
-const CONFIG_DIR = join(homedir(), ".struggle-ai");
-const CONFIG_PATH = join(CONFIG_DIR, "config.json");
-const AUTH_PATH = join(CONFIG_DIR, "auth.json");
-const OAUTH_PROVIDERS = new Set<Provider>(["openai-codex", "google-antigravity"]);
 const STARTUP_PROVIDERS: Provider[] = [
   "openai-codex",
   "google-antigravity",
@@ -32,85 +30,6 @@ const STARTUP_PROVIDERS: Provider[] = [
   "openai",
   "google",
 ];
-
-type StoredOAuthMap = Partial<Record<Provider, { type: "oauth" } & OAuthCredentials>>;
-
-async function readConfigFile(path: string): Promise<string | undefined> {
-  try {
-    return await readFile(path, "utf8");
-  } catch {
-    return undefined;
-  }
-}
-
-async function writeJsonFile(path: string, value: unknown): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
-}
-
-async function writeConfigFile(path: string, config: ProviderConfig): Promise<void> {
-  const { onAuthRefresh: _ignored, ...serializable } = config;
-  await writeJsonFile(path, serializable);
-}
-
-async function readAuthStore(): Promise<StoredOAuthMap> {
-  const raw = await readConfigFile(AUTH_PATH);
-  if (!raw) {
-    return {};
-  }
-
-  return JSON.parse(raw) as StoredOAuthMap;
-}
-
-async function writeAuthStore(store: StoredOAuthMap): Promise<void> {
-  await writeJsonFile(AUTH_PATH, store);
-}
-
-async function saveOAuthCredentials(provider: Provider, credentials: OAuthCredentials): Promise<void> {
-  const store = await readAuthStore();
-  store[provider] = { type: "oauth", ...credentials };
-  await writeAuthStore(store);
-}
-
-function attachRuntimeAuth(config: ProviderConfig, authStore: StoredOAuthMap): ProviderConfig {
-  const storedAuth = authStore[config.provider];
-  if (!storedAuth) {
-    return config;
-  }
-
-  return {
-    ...config,
-    auth: {
-      type: "oauth",
-      credentials: {
-        refresh: storedAuth.refresh,
-        access: storedAuth.access,
-        expires: storedAuth.expires,
-        ...(storedAuth.enterpriseUrl ? { enterpriseUrl: storedAuth.enterpriseUrl } : {}),
-        ...(storedAuth.projectId ? { projectId: storedAuth.projectId } : {}),
-        ...(storedAuth.email ? { email: storedAuth.email } : {}),
-        ...(storedAuth.accountId ? { accountId: storedAuth.accountId } : {}),
-      },
-    },
-    onAuthRefresh: async (auth: ProviderAuth) => {
-      if (auth.type === "oauth") {
-        await saveOAuthCredentials(config.provider, auth.credentials);
-      }
-    },
-  };
-}
-
-export async function getCurrentConfig(): Promise<ProviderConfig> {
-  const [configValue, authStore] = await Promise.all([
-    loadConfig(CONFIG_PATH, {
-      env: process.env,
-      readText: readConfigFile,
-    }),
-    readAuthStore(),
-  ]);
-
-  return attachRuntimeAuth(configValue, authStore);
-}
 
 function isSupportedProvider(value: string): value is Provider {
   return value in DEFAULT_CONFIGS;
@@ -413,6 +332,16 @@ export function createProgram(): Command {
     .action(async (providerInput: string) => {
       const provider = parseProviderOrThrow(providerInput);
       await runOAuthLogin(provider);
+    });
+
+  config
+    .command("logout")
+    .argument("[provider]", "Provider to clear saved credentials for; defaults to the active provider")
+    .action(async (providerInput?: string) => {
+      const current = await getCurrentConfig();
+      const provider = providerInput ? parseProviderOrThrow(providerInput) : current.provider;
+      await clearSavedAuth(provider);
+      process.stdout.write(`Cleared saved credentials for ${provider}\n`);
     });
 
   config.command("show").action(async () => {

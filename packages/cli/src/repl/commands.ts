@@ -9,6 +9,7 @@ import type { ReplState, SlashCommand } from "./types.js";
 export const HELP_TEXT = `
 Available commands:
   /help                     Show this help
+  /logout                   Clear saved credentials for the active provider
   /mode <guided|standard|socratic>
                             Switch learning mode
   /model [model-id]         Show models or switch the current model
@@ -40,6 +41,8 @@ export function parseSlashCommand(input: string): SlashCommand | undefined {
     case "exit":
     case "quit":
       return { kind: "exit" };
+    case "logout":
+      return { kind: "logout" };
     case "mode":
       if (args[0] === "guided" || args[0] === "standard" || args[0] === "socratic") {
         return { kind: "mode", mode: args[0] };
@@ -95,6 +98,7 @@ export async function handleSlashCommand(
   projectPath: string,
   replState: ReplState,
   handleModelCommand: (model?: string) => Promise<string[]>,
+  handleLogoutCommand: () => Promise<string[]>,
   writeLine: (value: string) => void,
   writeLines: (values: string[]) => void
 ): Promise<"continue" | "exit"> {
@@ -104,6 +108,9 @@ export async function handleSlashCommand(
       return "continue";
     case "exit":
       return "exit";
+    case "logout":
+      writeLines(await handleLogoutCommand());
+      return "continue";
     case "mode":
       session.setMode(command.mode);
       syncHintState(session, replState);

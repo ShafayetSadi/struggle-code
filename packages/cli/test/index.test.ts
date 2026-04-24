@@ -16,6 +16,7 @@ describe("cli entry", () => {
       kind: "model",
       model: "gemini-3-flash",
     });
+    expect(parseSlashCommand("/logout")).toEqual({ kind: "logout" });
     expect(parseSlashCommand("/share src/index.ts")).toEqual({ kind: "share", path: "src/index.ts" });
     expect(parseSlashCommand("/hint 2")).toEqual({ kind: "hint", level: 2 });
     expect(parseSlashCommand("/trail export notes/trail.md --format pdf")).toEqual({

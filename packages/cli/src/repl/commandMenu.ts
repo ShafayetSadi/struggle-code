@@ -5,6 +5,7 @@ import { P, chalk } from "./palette.js";
 
 export const COMMAND_ITEMS: SelectItem[] = [
   { value: "/help", label: "/help", description: "Open the command menu" },
+  { value: "/logout", label: "/logout", description: "Clear saved credentials for the active provider" },
   { value: "/mode guided", label: "/mode guided", description: "Guided mode — step-by-step questions" },
   { value: "/mode standard", label: "/mode standard", description: "Standard mode — balanced responses" },
   { value: "/mode socratic", label: "/mode socratic", description: "Socratic — questions only" },

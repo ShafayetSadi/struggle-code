@@ -8,6 +8,7 @@ export interface ReplState {
 export type SlashCommand =
   | { kind: "help" }
   | { kind: "exit" }
+  | { kind: "logout" }
   | { kind: "mode"; mode: Mode }
   | { kind: "model"; model?: string }
   | { kind: "share"; path: string }
