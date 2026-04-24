@@ -253,7 +253,7 @@ function buildFallbackPlan(
     {
       id: "shape-the-mode-contract",
       title: "Shape the mode contract",
-      summary: `Define how ${lowerRequest.includes("mode") ? "the three modes" : "the requested behavior"} differs so standard stays direct, guided explains before coding, and full-socratic requires user validation before execution.`,
+      summary: `Define how ${lowerRequest.includes("mode") ? "the three modes" : "the requested behavior"} differs so standard stays direct, guided explains before coding, and socratic requires user validation before execution.`,
       files: prioritizedFiles.slice(0, 3),
       verification: [
         "Check the docs and system prompt wording for consistent semantics.",
@@ -264,11 +264,11 @@ function buildFallbackPlan(
       id: "wire-the-live-runtime",
       title: "Wire the live runtime",
       summary:
-        "Introduce a planning layer in front of the active coding agent, then persist enough state to continue guided and full-socratic flows across turns.",
+        "Introduce a planning layer in front of the active coding agent, then persist enough state to continue guided and socratic flows across turns.",
       files: prioritizedFiles.slice(2, 6),
       verification: [
         "Confirm guided mode emits a project explanation before agent execution begins.",
-        "Confirm full-socratic mode blocks agent execution until the user demonstrates understanding.",
+        "Confirm socratic mode blocks agent execution until the user demonstrates understanding.",
       ],
     },
     {
@@ -290,8 +290,8 @@ function buildFallbackPlan(
       "Implement distinct mode behavior on top of the live coding-agent runtime so each mode changes the user experience, not just the wording of the prompt.",
     architecture: [
       "Keep `standard` as the direct coding-agent path with minimal extra ceremony.",
-      "Add a plan-building layer that inspects the repo and explains the implementation shape before any coding in `guided` and `full-socratic`.",
-      "Persist pending plan and validation state across turns so full-socratic can block execution until the user passes the understanding check.",
+      "Add a plan-building layer that inspects the repo and explains the implementation shape before any coding in `guided` and `socratic`.",
+      "Persist pending plan and validation state across turns so socratic can block execution until the user passes the understanding check.",
     ],
     phases,
   };
@@ -425,9 +425,9 @@ export function buildValidationQuestions(plan: ImplementationPlan, phaseIndex: n
   ];
 }
 
-export function formatPlanForUser(plan: ImplementationPlan, mode: "guided" | "full-socratic"): string {
+export function formatPlanForUser(plan: ImplementationPlan, mode: "guided" | "socratic"): string {
   const lines = [
-    `${mode === "guided" ? "Guided mode" : "Full-socratic mode"} is mapping the work before any coding starts.`,
+    `${mode === "guided" ? "Guided mode" : "Socratic mode"} is mapping the work before any coding starts.`,
     "",
     `Goal: ${plan.goal}`,
     `Summary: ${plan.summary}`,
@@ -445,18 +445,14 @@ export function formatPlanForUser(plan: ImplementationPlan, mode: "guided" | "fu
   return `${lines.join("\n")}\n`;
 }
 
-export function formatPhaseForUser(
-  plan: ImplementationPlan,
-  phaseIndex: number,
-  mode: "guided" | "full-socratic"
-): string {
+export function formatPhaseForUser(plan: ImplementationPlan, phaseIndex: number, mode: "guided" | "socratic"): string {
   const phase = plan.phases[phaseIndex];
   if (!phase) {
-    return `${mode === "guided" ? "Guided mode" : "Full-socratic mode"} has no remaining phases to explain.\n`;
+    return `${mode === "guided" ? "Guided mode" : "Socratic mode"} has no remaining phases to explain.\n`;
   }
 
   const lines = [
-    `${mode === "guided" ? "Guided mode" : "Full-socratic mode"} is ready for phase ${phaseIndex + 1} of ${plan.phases.length}.`,
+    `${mode === "guided" ? "Guided mode" : "Socratic mode"} is ready for phase ${phaseIndex + 1} of ${plan.phases.length}.`,
     "",
     `Phase: ${phase.title}`,
     `Why this phase exists: ${phase.summary}`,
@@ -487,7 +483,7 @@ export function buildPhaseExecutionPrompt(
   request: string,
   plan: ImplementationPlan,
   phaseIndex: number,
-  mode: "guided" | "full-socratic"
+  mode: "guided" | "socratic"
 ): string {
   const phase = plan.phases[phaseIndex];
   return [
@@ -537,7 +533,7 @@ export function formatPhaseValidationPrompt(
 export function formatExecutionApprovalPrompt(
   plan: ImplementationPlan,
   phaseIndex: number,
-  mode: "guided" | "full-socratic"
+  mode: "guided" | "socratic"
 ): string {
   const phase = plan.phases[phaseIndex];
   return [
@@ -617,11 +613,7 @@ export async function evaluateValidationAnswer(
   }
 }
 
-export function buildExecutionPrompt(
-  request: string,
-  plan: ImplementationPlan,
-  mode: "guided" | "full-socratic"
-): string {
+export function buildExecutionPrompt(request: string, plan: ImplementationPlan, mode: "guided" | "socratic"): string {
   return [
     request,
     "",

@@ -5,6 +5,7 @@ import { renderTrailMarkdown } from "../artifacts/trail.js";
 import { classifyIntentWithDeps } from "../gate/classifier.js";
 import type { Session } from "../index.js";
 import { createLLMAdapter } from "../llm/adapter.js";
+import { resolveProviderApiKey } from "../llm/auth.js";
 import {
   type ModeHistoryEntry,
   type PendingModePlan,
@@ -37,22 +38,6 @@ interface PhaseExecutionResult {
 
 function getThinkingLevel(mode: Mode): "medium" | "high" {
   return mode === "standard" ? "medium" : "high";
-}
-
-function getProviderApiKey(config: ProviderConfig): string {
-  const direct = process.env[config.apiKeyEnv];
-  if (direct) {
-    return direct;
-  }
-
-  if (config.provider === "google") {
-    const fallback = process.env.GEMINI_API_KEY;
-    if (fallback) {
-      return fallback;
-    }
-  }
-
-  throw new Error(`Missing API key: set ${config.apiKeyEnv} in your environment`);
 }
 
 function extractAssistantText(message: { content: Array<{ type: string; text?: string }> }): string {
@@ -145,7 +130,7 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
   const trail: TrailEntry[] = [];
   const adrs: ADR[] = [];
   const modeHistory: ModeHistoryEntry[] = [{ mode: state.mode, at: state.createdAt }];
-  const llm = createLLMAdapter(config);
+  let llm = createLLMAdapter(config);
   let pendingPlan: PendingModePlan | undefined;
 
   const agent = new Agent({
@@ -156,7 +141,8 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
       tools: createProjectTools({ projectPath, io }),
       messages: [],
     },
-    getApiKey: () => getProviderApiKey(config),
+    getApiKey: () => resolveProviderApiKey(config),
+    sessionId: state.id,
   });
 
   const pushTrail = (type: TrailEntry["type"], payload: unknown) => {
@@ -175,7 +161,7 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
         ? "Direct coding execution"
         : state.mode === "guided"
           ? "Guided build-up"
-          : "Full-socratic build-up";
+          : "Socratic build-up";
     state.activeSubProblem =
       state.mode === "standard"
         ? "Ready for the next coding task"
@@ -186,6 +172,33 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
 
   const resetPendingPlan = () => {
     pendingPlan = undefined;
+  };
+
+  const applyProviderConfig = (nextConfig: ProviderConfig) => {
+    Object.assign(config, {
+      provider: nextConfig.provider,
+      model: nextConfig.model,
+      apiKeyEnv: nextConfig.apiKeyEnv,
+      ...(nextConfig.auth ? { auth: nextConfig.auth } : {}),
+      ...(nextConfig.onAuthRefresh ? { onAuthRefresh: nextConfig.onAuthRefresh } : {}),
+    });
+    if (!nextConfig.auth && "auth" in config) {
+      Reflect.deleteProperty(config, "auth");
+    }
+    if (!nextConfig.onAuthRefresh && "onAuthRefresh" in config) {
+      Reflect.deleteProperty(config, "onAuthRefresh");
+    }
+
+    llm = createLLMAdapter(config);
+    agent.setModel(getModel(config.provider as KnownProvider, config.model as never));
+    pushTrail("mode_change", {
+      provider: config.provider,
+      model: config.model,
+      reason: "provider_config_update",
+    });
+    resetPendingPlan();
+    refreshAgentConfig();
+    setModePhase("idle");
   };
 
   const updateActiveStep = (value: string) => {
@@ -287,8 +300,13 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
       runCommandCount: 0,
       wroteFiles: new Set<string>(),
     };
+    let streamedAssistantText = "";
 
     const unsubscribe = agent.subscribe((event) => {
+      if (event.type === "message_start" && event.message.role === "assistant") {
+        streamedAssistantText = "";
+      }
+
       if (event.type === "tool_execution_start") {
         if (event.toolName === "write_file" && typeof event.args?.path === "string") {
           try {
@@ -319,14 +337,40 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
         return;
       }
 
-      if (event.type === "message_end" && event.message.role === "assistant") {
-        const text = extractAssistantText(event.message);
-        if (!text) {
+      if (
+        event.type === "message_update" &&
+        event.message.role === "assistant" &&
+        event.assistantMessageEvent.type === "text_delta"
+      ) {
+        const delta = event.assistantMessageEvent.delta;
+        if (!delta) {
           return;
         }
-        const assistantChunk: ResponseChunk = { kind: "text", value: `${text}\n` };
+        streamedAssistantText += delta;
+        const assistantChunk: ResponseChunk = { kind: "text", value: delta };
         push(assistantChunk);
         pushTrail("ai_response", { chunks: [assistantChunk] });
+        return;
+      }
+
+      if (event.type === "message_end" && event.message.role === "assistant") {
+        const text = extractAssistantText(event.message);
+        if (!text && streamedAssistantText.length === 0) {
+          return;
+        }
+
+        const trailingChunkValue =
+          streamedAssistantText.length === 0
+            ? `${text}\n`
+            : text.startsWith(streamedAssistantText)
+              ? `${text.slice(streamedAssistantText.length)}\n`
+              : "\n";
+
+        if (trailingChunkValue.length > 0) {
+          const assistantChunk: ResponseChunk = { kind: "text", value: trailingChunkValue };
+          push(assistantChunk);
+          pushTrail("ai_response", { chunks: [assistantChunk] });
+        }
         return;
       }
 
@@ -420,10 +464,10 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
           return;
         }
 
-        if (state.mode === "full-socratic" && pendingPlan?.mode === "full-socratic") {
+        if (state.mode === "socratic" && pendingPlan?.mode === "socratic") {
           const currentPhase = getPendingPhase();
           if (!currentPhase) {
-            pushTextChunk(push, "Full-socratic mode has no remaining phases for this request.\n");
+            pushTextChunk(push, "Socratic mode has no remaining phases for this request.\n");
             resetPendingPlan();
             setReadyStateForMode();
             return;
@@ -433,10 +477,10 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
             if (!looksLikeApproval(message)) {
               setModePhase("awaiting-approval");
               updateActiveStep(`Waiting for approval to execute phase ${pendingPlan.currentPhaseIndex + 1}`);
-              pushTextChunk(push, formatPhaseForUser(pendingPlan.plan, pendingPlan.currentPhaseIndex, "full-socratic"));
+              pushTextChunk(push, formatPhaseForUser(pendingPlan.plan, pendingPlan.currentPhaseIndex, "socratic"));
               pushTextChunk(
                 push,
-                `${formatExecutionApprovalPrompt(pendingPlan.plan, pendingPlan.currentPhaseIndex, "full-socratic")}\n`
+                `${formatExecutionApprovalPrompt(pendingPlan.plan, pendingPlan.currentPhaseIndex, "socratic")}\n`
               );
               return;
             }
@@ -450,7 +494,7 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
                 pendingPlan.request,
                 pendingPlan.plan,
                 pendingPlan.currentPhaseIndex,
-                "full-socratic"
+                "socratic"
               ),
               push
             );
@@ -463,9 +507,9 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
               pushTextChunk(push, `${validation.reason}\n`);
               pushTextChunk(
                 push,
-                "I am keeping you on the same full-socratic phase because I did not see enough execution evidence in the repo.\n"
+                "I am keeping you on the same socratic phase because I did not see enough execution evidence in the repo.\n"
               );
-              pushTextChunk(push, formatPhaseForUser(pendingPlan.plan, pendingPlan.currentPhaseIndex, "full-socratic"));
+              pushTextChunk(push, formatPhaseForUser(pendingPlan.plan, pendingPlan.currentPhaseIndex, "socratic"));
               pushTextChunk(
                 push,
                 formatPhaseValidationPrompt(
@@ -482,8 +526,8 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
             pendingPlan.validationPassed = false;
 
             if (pendingPlan.currentPhaseIndex >= pendingPlan.plan.phases.length) {
-              pushTrail("milestone_complete", { mode: "full-socratic", goal: pendingPlan.plan.goal });
-              pushTextChunk(push, "Full-socratic mode finished every planned phase for this request.\n");
+              pushTrail("milestone_complete", { mode: "socratic", goal: pendingPlan.plan.goal });
+              pushTextChunk(push, "Socratic mode finished every planned phase for this request.\n");
               resetPendingPlan();
               setReadyStateForMode();
               return;
@@ -496,7 +540,7 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
               push,
               "Phase completed. I’m moving to the next phase and will quiz you again before coding.\n"
             );
-            pushTextChunk(push, formatPhaseForUser(pendingPlan.plan, pendingPlan.currentPhaseIndex, "full-socratic"));
+            pushTextChunk(push, formatPhaseForUser(pendingPlan.plan, pendingPlan.currentPhaseIndex, "socratic"));
             pushTextChunk(
               push,
               formatPhaseValidationPrompt(
@@ -512,7 +556,7 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
           updateActiveStep("Checking whether the user understands the implementation plan");
           pendingPlan.attempts += 1;
           pushTrail("comprehension_check", {
-            mode: "full-socratic",
+            mode: "socratic",
             attempt: pendingPlan.attempts,
           });
 
@@ -540,7 +584,7 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
           pushTextChunk(push, "Validation passed for this phase.\n");
           pushTextChunk(
             push,
-            `${formatExecutionApprovalPrompt(pendingPlan.plan, pendingPlan.currentPhaseIndex, "full-socratic")}\n`
+            `${formatExecutionApprovalPrompt(pendingPlan.plan, pendingPlan.currentPhaseIndex, "socratic")}\n`
           );
           return;
         }
@@ -550,7 +594,7 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
           adapterFactory: createLLMAdapter,
         });
 
-        if (intent === "quick_help" || (intent !== "project" && state.mode !== "full-socratic")) {
+        if (intent === "quick_help" || (intent !== "project" && state.mode !== "socratic")) {
           setModePhase("executing");
           updateActiveStep(
             intent === "debug" ? "Working through the debugging request" : "Answering the current question"
@@ -605,7 +649,7 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
           });
           const validationQuestions = buildValidationQuestions(plan, 0);
           pendingPlan = {
-            mode: "full-socratic",
+            mode: "socratic",
             intent,
             request: message,
             plan,
@@ -614,9 +658,9 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
             currentPhaseIndex: 0,
             validationPassed: false,
           };
-          pushTrail("milestone_start", { mode: "full-socratic", goal: plan.goal, phases: plan.phases.length });
-          pushTextChunk(push, formatPlanForUser(plan, "full-socratic"));
-          pushTextChunk(push, formatPhaseForUser(plan, 0, "full-socratic"));
+          pushTrail("milestone_start", { mode: "socratic", goal: plan.goal, phases: plan.phases.length });
+          pushTextChunk(push, formatPlanForUser(plan, "socratic"));
+          pushTextChunk(push, formatPhaseForUser(plan, 0, "socratic"));
           pushTextChunk(push, formatPhaseValidationPrompt(plan, 0, validationQuestions));
           setModePhase("awaiting-validation");
           updateActiveStep("Waiting for the user to explain phase 1 back");
@@ -633,6 +677,11 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
       setModePhase("idle");
       refreshAgentConfig();
       io.notify("info", `Switched Struggle AI mode to ${mode}.`);
+    },
+    setProviderConfig(nextConfig: ProviderConfig) {
+      touchState(state);
+      applyProviderConfig(nextConfig);
+      io.notify("info", `Switched model to ${nextConfig.provider}/${nextConfig.model}.`);
     },
     async shareFile(path: string) {
       if (!state.sharedFiles.includes(path)) {

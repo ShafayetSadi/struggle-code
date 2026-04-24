@@ -1,26 +1,35 @@
 import { type Interface, createInterface } from "node:readline/promises";
 
-import { type IO, type ProviderConfig, startSession } from "@struggle-ai/core";
+import { DEFAULT_CONFIGS, type IO, type ProviderConfig, startSession } from "@struggle-ai/core";
 
+import { cliIO } from "./ioImpl.js";
+import { Key, ProcessTerminal, TUI } from "./pi-tui/src/index.js";
 import { copyToClipboard } from "./repl/clipboard.js";
 import { HELP_TEXT, ROOT_MENU_TEXT, handleSlashCommand, parseSlashCommand, streamChunks, syncHintState } from "./repl/commands.js";
 import { formatChunk, formatPrompt, P, chalk } from "./repl/formatting.js";
 import { createTuiIO } from "./repl/io.js";
-import { Key, ProcessTerminal, TUI } from "./pi-tui/src/index.js";
 import { ReplScreen } from "./repl/screen.js";
-import type { ReplState } from "./repl/types.js";
-import { cliIO } from "./ioImpl.js";
+import type { ReplState, SlashCommand } from "./repl/types.js";
 
 const COMMAND_HINT = "type / for commands";
 
-function shouldCaptureCommandOutput(kind: ReplState extends never ? never : { kind: string }["kind"]): boolean {
-  return kind !== "root-menu" && kind !== "help" && kind !== "mode-menu" && kind !== "copy";
+function shouldCaptureCommandOutput(command: SlashCommand): boolean {
+  return command.kind !== "root-menu" && command.kind !== "help" && command.kind !== "mode-menu" && command.kind !== "copy";
+}
+
+export interface RunReplOptions {
+  projectPath?: string;
+  io?: IO;
+  config?: ProviderConfig;
+  input?: NodeJS.ReadableStream;
+  output?: NodeJS.WritableStream;
 }
 
 async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> {
   const projectPath = options.projectPath ?? process.cwd();
   const io = options.io ?? cliIO;
-  let session = await startSession(projectPath, io, options.config);
+  const currentConfig = options.config ?? DEFAULT_CONFIGS.anthropic;
+  let session = await startSession(projectPath, io, currentConfig);
   let lastGeneratedText: string | undefined;
   const replState: ReplState = {
     hintLevel: 1,
@@ -31,6 +40,13 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
     input: options.input ?? process.stdin,
     output: options.output ?? process.stdout,
   });
+
+  const handleModelCommand = async (model?: string): Promise<string[]> => {
+    if (!model) {
+      return [`active model ${currentConfig.provider}/${currentConfig.model}`];
+    }
+    return ["model switching is not available in-session yet"];
+  };
 
   process.stdout.write(chalk.hex(P.textPrimary).bold("Struggle AI") + chalk.hex(P.textMuted)("  interactive\n"));
   process.stdout.write(chalk.hex(P.textMuted)(`${COMMAND_HINT}\n\n`));
@@ -64,7 +80,7 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
             continue;
           }
           if (command.kind === "new") {
-            session = await startSession(projectPath, io, options.config);
+            session = await startSession(projectPath, io, currentConfig);
             replState.hintLevel = 1;
             replState.lastMilestone = session.state.activeMilestone;
             process.stdout.write(chalk.hex(P.green)("started a fresh session\n"));
@@ -78,6 +94,7 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
             session,
             projectPath,
             replState,
+            handleModelCommand,
             (line) => {
               commandOutput.push(line);
               process.stdout.write(`${line}\n`);
@@ -88,7 +105,7 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
             }
           );
 
-          if (shouldCaptureCommandOutput(command.kind) && commandOutput.length > 0) {
+          if (shouldCaptureCommandOutput(command) && commandOutput.length > 0) {
             lastGeneratedText = commandOutput.join("\n").trimEnd();
           }
 
@@ -101,9 +118,7 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
         await streamChunks(session.sendMessage(trimmed), (chunk) => {
           const lines = formatChunk(chunk);
           responseLines.push(...lines);
-          for (const line of lines) {
-            process.stdout.write(`${line}\n`);
-          }
+          for (const line of lines) process.stdout.write(`${line}\n`);
         });
         lastGeneratedText = responseLines.join("\n").trimEnd();
         syncHintState(session, replState);
@@ -118,14 +133,6 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
   }
 }
 
-export interface RunReplOptions {
-  projectPath?: string;
-  io?: IO;
-  config?: ProviderConfig;
-  input?: NodeJS.ReadableStream;
-  output?: NodeJS.WritableStream;
-}
-
 export async function runRepl(options: RunReplOptions = {}): Promise<void> {
   const usesCustomStreams =
     (options.input !== undefined && options.input !== process.stdin) ||
@@ -138,6 +145,7 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
 
   const projectPath = options.projectPath ?? process.cwd();
   const baseIO = options.io ?? cliIO;
+  const currentConfig = options.config ?? DEFAULT_CONFIGS.anthropic;
   const pending: string[] = [];
   const writeLine = (value: string) => {
     pending.push(value);
@@ -147,7 +155,7 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
   };
 
   const io = createTuiIO(baseIO, writeLine);
-  let session = await startSession(projectPath, io, options.config);
+  let session = await startSession(projectPath, io, currentConfig);
   let lastGeneratedText: string | undefined;
   const replState: ReplState = {
     hintLevel: 1,
@@ -162,11 +170,21 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
     resolveExit = resolve;
   });
 
-  const modelLabel = options.config ? `${options.config.provider}/${options.config.model}` : "default model";
+  const screen = new ReplScreen(
+    session.state.mode,
+    projectPath,
+    `${currentConfig.provider}/${currentConfig.model}`,
+    (value) => {
+      void submitValue(value);
+    }
+  );
 
-  const screen = new ReplScreen(session.state.mode, projectPath, modelLabel, (value) => {
-    void submitValue(value);
-  });
+  const handleModelCommand = async (model?: string): Promise<string[]> => {
+    if (!model) {
+      return [`active model ${currentConfig.provider}/${currentConfig.model}`];
+    }
+    return ["model switching is not available in-session yet"];
+  };
 
   for (const line of pending.splice(0)) screen.append("system", line);
   screen.append("system", COMMAND_HINT);
@@ -182,6 +200,7 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
   const refreshSessionState = () => {
     screen.setMode(session.state.mode);
     screen.setActiveSubProblem(session.state.activeSubProblem);
+    screen.setModelLabel(`${currentConfig.provider}/${currentConfig.model}`);
     screen.invalidate();
     tui.requestRender();
   };
@@ -203,11 +222,7 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
       if (command) {
         if (command.kind === "root-menu" || command.kind === "help" || command.kind === "mode-menu") {
           screen.setInputValue(
-            command.kind === "root-menu"
-              ? "/"
-              : command.kind === "help"
-                ? "/help "
-                : "/mode "
+            command.kind === "root-menu" ? "/" : command.kind === "help" ? "/help " : "/mode "
           );
           tui.requestRender();
           return;
@@ -234,7 +249,7 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
         }
         if (command.kind === "new") {
           screen.clearEntries();
-          session = await startSession(projectPath, io, options.config);
+          session = await startSession(projectPath, io, currentConfig);
           replState.hintLevel = 1;
           replState.lastMilestone = session.state.activeMilestone;
           screen.setMode(session.state.mode);
@@ -259,11 +274,12 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
           session,
           projectPath,
           replState,
+          handleModelCommand,
           trackedWriteLine,
           trackedWriteLines
         );
 
-        if (shouldCaptureCommandOutput(command.kind) && commandOutput.length > 0) {
+        if (shouldCaptureCommandOutput(command) && commandOutput.length > 0) {
           lastGeneratedText = commandOutput.join("\n").trimEnd();
         }
 
@@ -321,7 +337,6 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
       close();
       return { consume: true };
     }
-
     return undefined;
   });
 

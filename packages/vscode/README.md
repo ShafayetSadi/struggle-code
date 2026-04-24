@@ -15,7 +15,7 @@ struggle config set-provider anthropic --key <your-api-key>
 
 - **Chat panel** — Start a session and get Socratic guidance without leaving your editor
 - **Learning Trail sidebar** — Every session is logged as a searchable trail of decisions and ADRs
-- **Friction modes** — Guided, Standard, or Full Socratic depending on how much hand-holding you want
+- **Friction modes** — Guided, Standard, or Socratic depending on how much hand-holding you want
 - **`/stuck` button** — Four diagnostic questions that help you unblock yourself
 
 ## Usage

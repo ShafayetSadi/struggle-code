@@ -22,7 +22,7 @@ Read this entire prompt before writing any code. Plan before you act.
 
 ## Project Context (What You're Building Toward)
 
-Struggle AI is a Socratic coding mentor delivered as (a) a CLI and (b) a VS Code extension, both backed by a shared TypeScript core. It uses scaled friction to teach comprehension — refusing to generate code until the developer can articulate what they're building. The product has three friction modes (Full Socratic, Guided, Standard), produces Architecture Decision Records (ADRs) per module, maintains a Learning Trail, and tracks an Understanding Score.
+Struggle AI is a Socratic coding mentor delivered as (a) a CLI and (b) a VS Code extension, both backed by a shared TypeScript core. It uses scaled friction to teach comprehension — refusing to generate code until the developer can articulate what they're building. The product has three friction modes (Socratic, Guided, Standard), produces Architecture Decision Records (ADRs) per module, maintains a Learning Trail, and tracks an Understanding Score.
 
 For this initialization task, you do not need to implement any of that. You are only building the skeleton with stable public APIs and meaningful stub implementations.
 
@@ -171,7 +171,7 @@ Name: `@struggle-ai/core`. Type: module. Main: `./dist/index.js`. Types: `./dist
 Copy these types verbatim — these are the stable API contract:
 
 ```typescript
-export type Mode = "full-socratic" | "guided" | "standard";
+export type Mode = "socratic" | "guided" | "standard";
 export type Intent = "quick_help" | "debug" | "project";
 export type Provider = "anthropic" | "google" | "openai";
 
@@ -423,7 +423,7 @@ Next.js 15 App Router with TypeScript, Tailwind CSS 4, shadcn/ui initialized (us
 A single-page layout with:
 
 1. **Hero section:** project name "Struggle AI", tagline placeholder `"[tagline to be written by Dev D]"`, install command block `npm install -g @struggle-ai/cli` with a copy button, and a disabled "Watch demo" button (demo video URL pending).
-2. **Three placeholder sections** with `TODO:` comments for: Manifesto, How It Works (three beats), Three Modes (Full Socratic / Guided / Standard) — each section is a `<section>` tag with a heading and placeholder paragraph.
+2. **Three placeholder sections** with `TODO:` comments for: Manifesto, How It Works (three beats), Three Modes (Socratic / Guided / Standard) — each section is a `<section>` tag with a heading and placeholder paragraph.
 3. **Footer** with placeholder team credits.
 
 Apply dark mode (Tailwind `dark:` classes) by default. Use shadcn/ui Button and Card primitives.

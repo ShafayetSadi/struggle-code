@@ -5,13 +5,14 @@ Terminal interface for Struggle AI. This package wraps `@struggle-ai/core` with 
 ## Requirements
 
 - Node.js 20+
-- One configured provider API key
+- One configured provider API key or account login
 
 Supported environment variables:
 
 - `ANTHROPIC_API_KEY`
 - `GOOGLE_API_KEY` or `GEMINI_API_KEY`
 - `OPENAI_API_KEY`
+- `OPENROUTER_API_KEY`
 
 ## Install
 
@@ -30,6 +31,8 @@ Start the REPL in the current directory:
 npm exec --workspace packages/cli struggle
 ```
 
+If the active provider is missing a saved login or API key, the CLI now pauses before the REPL and walks you through provider selection, login, and optional model selection.
+
 Or point it at a specific project:
 
 ```bash
@@ -43,10 +46,30 @@ npm exec --workspace packages/cli struggle -- config set-provider anthropic
 npm exec --workspace packages/cli struggle -- config show
 ```
 
+Choose a different model for the active provider:
+
+```bash
+npm exec --workspace packages/cli struggle -- config list-models anthropic
+npm exec --workspace packages/cli struggle -- config set-model claude-sonnet-4-5
+```
+
+Login for account-backed providers:
+
+```bash
+npm exec --workspace packages/cli struggle -- config login openai-codex
+npm exec --workspace packages/cli struggle -- config set-provider openai-codex
+```
+
+You can also override provider or model for a single run:
+
+```bash
+npm exec --workspace packages/cli struggle -- --provider openrouter --model openai/gpt-oss-20b
+```
+
 ## REPL Commands
 
 - `/help` shows every supported slash command
-- `/mode <guided|standard|full-socratic>` switches session mode
+- `/mode <guided|standard|socratic>` switches session mode
 - `/share <path>` adds a file to the active session context
 - `/stuck` triggers a stuck-session intervention
 - `/hint [1|2|3]` asks for a hint; omitted level auto-increments per milestone
@@ -57,7 +80,7 @@ npm exec --workspace packages/cli struggle -- config show
 
 - `guided`: more deliberate planning before edits
 - `standard`: balanced execution with minimal ceremony
-- `full-socratic`: deeper investigation and verification before stopping
+- `socratic`: deeper investigation and verification before stopping
 
 These modes now tune the coding agent prompt. They no longer select separate learning-state machines.
 

@@ -42,11 +42,11 @@ Absorbed from teammate's proposal. Mode is user-selectable per project.
 
 | Mode | Friction Level | Flow |
 | --- | --- | --- |
-| **Full Socratic** | High | Request → decompose into 3–5 sub-problems → 2–3 Socratic questions per sub-problem → evaluate answers → tiny code chunk generated → Explain-It-Back checkpoint → next sub-problem |
+| **Socratic** | High | Request → decompose into 3–5 sub-problems → 2–3 Socratic questions per sub-problem → evaluate answers → tiny code chunk generated → Explain-It-Back checkpoint → next sub-problem |
 | **Guided** | Medium | Design interview → AI writes milestone → user answers comprehension question → ADR auto-generated → next milestone |
 | **Standard** | Low | Brief design clarification → AI scaffolds code → user fills body OR AI writes + mandatory digest → ADR auto-generated |
 
-Default mode on first launch: **Guided**. Users switch via `/mode full-socratic | guided | standard`.
+Default mode on first launch: **Guided**. Users switch via `/mode socratic | guided | standard`.
 
 ### 1.3 Core Features (MVP — all modes unless noted)
 
@@ -56,7 +56,7 @@ Default mode on first launch: **Guided**. Users switch via `/mode full-socratic 
 | F2 | Intent classifier (quick_help / debug / project) | ✅ | ✅ |
 | F3 | Design Interview state machine | ✅ | ✅ |
 | F4 | Milestone loop with per-mode behavior | ✅ | ✅ |
-| F5 | Sub-problem decomposition (Full Socratic only) | ✅ | ✅ |
+| F5 | Sub-problem decomposition (Socratic only) | ✅ | ✅ |
 | F6 | Explain-It-Back checkpoint | ✅ | ✅ |
 | F7 | ADR auto-generation per module | ✅ | ✅ |
 | F8 | "Concepts You Should Know" + "What Could Break" structured outputs | ✅ | ✅ |
@@ -74,7 +74,7 @@ Default mode on first launch: **Guided**. Users switch via `/mode full-socratic 
 - No automatic mode transitions based on detected comprehension
 - No team features, dashboards, accounts, or cloud sync
 - No autonomous file reading in CLI (pull-only via `/share`)
-- No custom model support beyond Anthropic + Google
+- No hosted account sync or cloud profile management
 - No multi-language UI (English only)
 - No Windows-native CLI (WSL2 only for MVP)
 
@@ -150,7 +150,7 @@ The `core` package exposes a clean TypeScript API. CLI and Extension call it ide
 
 ```typescript
 // packages/core/src/types.ts
-export type Mode = "full-socratic" | "guided" | "standard";
+export type Mode = "socratic" | "guided" | "standard";
 export type Intent = "quick_help" | "debug" | "project";
 
 export interface SessionState {
@@ -288,7 +288,7 @@ If you strongly prefer another role, designate someone else as Core Lead — but
 
 **Doesn't touch:** CLI, Core internals (uses the API), Landing.
 
-**Scope reality check:** The extension MVP is **minimal by design**. It demonstrates "the core ports cleanly" — not "every CLI feature exists here." Ship Guided mode only, chat panel only, with Trail/ADR viewer. Full Socratic + Standard modes are stretch. `/stuck` and `/hint` are buttons in the chat UI, not separate commands.
+**Scope reality check:** The extension MVP is **minimal by design**. It demonstrates "the core ports cleanly" — not "every CLI feature exists here." Ship Guided mode only, chat panel only, with Trail/ADR viewer. Socratic + Standard modes are stretch. `/stuck` and `/hint` are buttons in the chat UI, not separate commands.
 
 #### Dev D — Landing & Demo
 
@@ -346,7 +346,7 @@ Everyone works against the stable API. Dev A is filling in real implementations;
 | --- | --- | --- | --- | --- |
 | 4–8 | LLM adapter via pi-ai, streaming working, classifier implementation | Finish prompts for all modes, CLI REPL loop with commander, pi-tui integrated | Chat panel React UI, streaming response display, input field + send | Three-beats "How It Works" section with placeholder asciinema |
 | 8–12 | Design Interview state machine, Guided mode milestone generator | `/mode` command, dispatch user messages to core, Guided mode demo works | Mode toggle UI, integrate `@struggle-ai/core` actual package (not stub) | "Three modes" explainer section with diagrams |
-| 12–16 | Full Socratic mode (sub-problem decomp + Explain-It-Back), Standard mode | `/share` command with path validation and binary detection | Sidebar view for current Trail (simple list) | Record first asciinema clips with Dev B (Guided mode walkthrough) |
+| 12–16 | Socratic mode (sub-problem decomp + Explain-It-Back), Standard mode | `/share` command with path validation and binary detection | Sidebar view for current Trail (simple list) | Record first asciinema clips with Dev B (Guided mode walkthrough) |
 | 16–20 | ADR generator, Understanding Score tracker, Trail append-only engine | `/stuck` 4-question flow, `/hint` 3-level system | ADR viewer in sidebar, polish chat UX | Embed asciinema clips, content polish, start video script draft |
 | 20–24 | Trail export to Markdown, allowlisted doc URL filter | Trail export command, prompts round-2 tuning based on real runs | Final extension polish, VSIX packaging test, install from VSIX works | Landing page 90% complete, responsive design tested on mobile |
 
@@ -391,7 +391,7 @@ Shift from parallel to convergent work. Bug hunting, prompt tuning, demo prepara
 | 4–6 | Implement `pi-ai` adapter with streaming | LLM calls work |
 | 6–8 | Implement intent classifier | `classifyIntent()` returns correct labels on 10 test inputs |
 | 8–12 | Implement Design Interview state machine + Guided mode milestone loop | End-to-end FastAPI blog design conversation works |
-| 12–16 | Implement Full Socratic mode (sub-problem decomposition + Explain-It-Back) | Demo: "Build JWT auth" → 4 sub-problems → questions → code per sub-problem |
+| 12–16 | Implement Socratic mode (sub-problem decomposition + Explain-It-Back) | Demo: "Build JWT auth" → 4 sub-problems → questions → code per sub-problem |
 | 16–20 | Implement Standard mode + ADR generator | Each completed milestone produces an ADR with all required fields |
 | **20–28** | **Sleep** | — |
 | 28–32 | Bug fixes from H24 walkthrough, prompt refinement based on real runs | Issues closed |
@@ -522,13 +522,13 @@ At each gate, meet briefly and decide GO / PIVOT / CUT. Don't let the build drif
 
 ### Gate 2 — Hour 12: Core Feel Check
 - **GO if:** Guided mode works end-to-end on Dev A's machine with a real LLM call
-- **PIVOT if:** Only stubs working — Dev A abandons Standard and Full Socratic, doubles down on Guided only
+- **PIVOT if:** Only stubs working — Dev A abandons Standard and Socratic, doubles down on Guided only
 - **CUT if:** LLM integration failing — fall back to direct Anthropic SDK, skip pi-ai
 
 ### Gate 3 — Hour 24: Scope Freeze
 - **GO if:** End-to-end FastAPI blog demo runs cleanly in CLI, extension shows one mode working
 - **PIVOT if:** One of CLI or Extension isn't ready — that track drops to MVP-minimum, other track absorbs polish time
-- **CUT if:** Both lagging — cut Full Socratic and Standard modes, ship only Guided in both CLI and Extension
+- **CUT if:** Both lagging — cut Socratic and Standard modes, ship only Guided in both CLI and Extension
 
 ### Gate 4 — Hour 40: Video Go Decision
 - **GO if:** All three deliverables (CLI, Extension, Landing) working cleanly, video script approved
@@ -580,7 +580,7 @@ Pin this checklist in your chat. Cross off live:
 
 Draft for `anything_else_to_say` — refine with your team:
 
-> Struggle AI is our stance: vibe-coders ship code, engineers ship understanding. We built it as both a CLI (for terminal workflows) and a VS Code extension (for editor workflows) on a shared core — proving that scaled friction can port across surfaces without rewriting logic. The three friction modes (Full Socratic, Guided, Standard) let developers choose their own level; the Learning Trail + ADRs make comprehension a first-class engineering artifact. With more time, we'd wrap Cursor and Claude Code as friction layers — but the architecture already allows it.
+> Struggle AI is our stance: vibe-coders ship code, engineers ship understanding. We built it as both a CLI (for terminal workflows) and a VS Code extension (for editor workflows) on a shared core — proving that scaled friction can port across surfaces without rewriting logic. The three friction modes (Socratic, Guided, Standard) let developers choose their own level; the Learning Trail + ADRs make comprehension a first-class engineering artifact. With more time, we'd wrap Cursor and Claude Code as friction layers — but the architecture already allows it.
 
 ---
 

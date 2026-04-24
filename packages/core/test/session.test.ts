@@ -20,6 +20,7 @@ vi.mock("@mariozechner/pi-ai", () => ({
     contextWindow: 200_000,
     maxTokens: 8_000,
   })),
+  getOAuthApiKey: vi.fn(),
 }));
 
 vi.mock("@mariozechner/pi-agent-core", () => {
@@ -191,10 +192,13 @@ describe("coding agent session", () => {
     expect(agent.systemPrompt).toContain(
       "Start by inspecting the relevant code and building a concrete implementation plan before any coding."
     );
+    expect(agent.systemPrompt).toContain(
+      "Do not install packages, create virtual environments, or diagnose unrelated dependencies unless the user asked for environment help or the task is blocked on a confirmed missing dependency."
+    );
 
-    session.setMode("full-socratic");
+    session.setMode("socratic");
     expect(agent.thinkingLevel).toBe("high");
-    expect(agent.systemPrompt).toContain("Current mode: full-socratic.");
+    expect(agent.systemPrompt).toContain("Current mode: socratic.");
     expect(agent.systemPrompt).toContain(
       "Before each phase executes, require the user to explain that phase's goal, file ownership, and verification path back in their own words."
     );
@@ -355,7 +359,107 @@ describe("coding agent session", () => {
     expect(session.state.modePhase).toBe("idle");
   });
 
-  it("runs full-socratic mode as a phased quiz-driven flow", async () => {
+  it("streams assistant text updates before the final message ends", async () => {
+    MockAgentClass.events = [
+      {
+        type: "message_start",
+        message: {
+          role: "assistant",
+          content: [],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+      },
+      {
+        type: "message_update",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "Hello there" }],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+        assistantMessageEvent: {
+          type: "text_delta",
+          delta: "Hello there",
+        },
+      },
+      {
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "Hello there" }],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+      },
+      {
+        type: "turn_end",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "Hello there" }],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+        toolResults: [],
+      },
+    ];
+
+    const io = new MemoryIO();
+    const session = await startSession("/tmp/project", io);
+    const chunks = await collectChunks(session.sendMessage("hello"));
+
+    expect(chunks).toEqual([
+      { kind: "text", value: "Hello there" },
+      { kind: "text", value: "\n" },
+    ]);
+    expect(MockAgentClass.instances[0]?.messages).toEqual(["hello"]);
+  });
+
+  it("runs socratic mode as a phased quiz-driven flow", async () => {
     MockAgentClass.events = [
       {
         type: "tool_execution_start",
@@ -415,7 +519,7 @@ describe("coding agent session", () => {
 
     const io = new MemoryIO();
     const session = await startSession("/tmp/project", io);
-    session.setMode("full-socratic");
+    session.setMode("socratic");
 
     const firstTurn = await collectChunks(
       session.sendMessage("Implement distinct mode behavior for the coding agent.")
@@ -424,12 +528,12 @@ describe("coding agent session", () => {
       firstTurn.some(
         (chunk) =>
           chunk.kind === "text" &&
-          chunk.value.includes("Full-socratic mode is mapping the work before any coding starts.")
+          chunk.value.includes("Socratic mode is mapping the work before any coding starts.")
       )
     ).toBe(true);
     expect(
       firstTurn.some(
-        (chunk) => chunk.kind === "text" && chunk.value.includes("Full-socratic mode is ready for phase 1")
+        (chunk) => chunk.kind === "text" && chunk.value.includes("Socratic mode is ready for phase 1")
       )
     ).toBe(true);
     expect(firstTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("Before I execute phase 1"))).toBe(
@@ -478,7 +582,7 @@ describe("coding agent session", () => {
     expect(MockAgentClass.instances[0]?.messages[0]).toContain("Execute only phase 1");
     expect(
       fourthTurn.some(
-        (chunk) => chunk.kind === "text" && chunk.value.includes("Full-socratic mode is ready for phase 2")
+        (chunk) => chunk.kind === "text" && chunk.value.includes("Socratic mode is ready for phase 2")
       )
     ).toBe(true);
     expect(fourthTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("Before I execute phase 2"))).toBe(
@@ -487,10 +591,10 @@ describe("coding agent session", () => {
     expect(session.state.modePhase).toBe("awaiting-validation");
   });
 
-  it("routes debug requests through the full-socratic loop instead of executing immediately", async () => {
+  it("routes debug requests through the socratic loop instead of executing immediately", async () => {
     const io = new MemoryIO();
     const session = await startSession("/tmp/project", io);
-    session.setMode("full-socratic");
+    session.setMode("socratic");
 
     const firstTurn = await collectChunks(session.sendMessage("Why does the app crash on startup after I added auth?"));
 
@@ -498,7 +602,7 @@ describe("coding agent session", () => {
       firstTurn.some(
         (chunk) =>
           chunk.kind === "text" &&
-          chunk.value.includes("Full-socratic mode is mapping the work before any coding starts.")
+          chunk.value.includes("Socratic mode is mapping the work before any coding starts.")
       )
     ).toBe(true);
     expect(firstTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("Before I execute phase 1"))).toBe(

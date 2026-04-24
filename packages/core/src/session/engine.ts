@@ -169,7 +169,7 @@ export async function createSessionEngine(projectPath: string, io: IO, config?: 
   function resetInactiveModes(): void {
     if (state.mode !== "guided") runtime.guided = undefined;
     if (state.mode !== "standard") runtime.standard = undefined;
-    if (state.mode !== "full-socratic") runtime.socratic = undefined;
+    if (state.mode !== "socratic") runtime.socratic = undefined;
     deriveDisplayState(state, runtime);
   }
 
@@ -626,7 +626,7 @@ export async function createSessionEngine(projectPath: string, io: IO, config?: 
     runtime.socratic = undefined;
     deriveDisplayState(state, runtime);
     const chunks: ResponseChunk[] = [
-      createPromptedTextChunk("Full Socratic mode finished the decomposition for this task."),
+      createPromptedTextChunk("Socratic mode finished the decomposition for this task."),
     ];
     recordChunks(chunks, "project");
     return chunks;
@@ -691,7 +691,7 @@ export async function createSessionEngine(projectPath: string, io: IO, config?: 
         chunks = await buildDebugHelp(message, intent);
       } else if (state.mode === "standard") {
         chunks = await startStandardProject(message);
-      } else if (state.mode === "full-socratic") {
+      } else if (state.mode === "socratic") {
         chunks = await startSocraticProject(message);
       } else {
         chunks = await startGuidedProject(message);
@@ -706,6 +706,23 @@ export async function createSessionEngine(projectPath: string, io: IO, config?: 
       pushTrail("mode_change", { mode }, runtime.activeIntent);
       resetInactiveModes();
       io.notify("info", `Switched Struggle AI mode to ${mode}.`);
+    },
+    setProviderConfig(config: ProviderConfig) {
+      Object.assign(providerConfig, {
+        provider: config.provider,
+        model: config.model,
+        apiKeyEnv: config.apiKeyEnv,
+        ...(config.auth ? { auth: config.auth } : {}),
+        ...(config.onAuthRefresh ? { onAuthRefresh: config.onAuthRefresh } : {}),
+      });
+      if (!config.auth && "auth" in providerConfig) {
+        Reflect.deleteProperty(providerConfig, "auth");
+      }
+      if (!config.onAuthRefresh && "onAuthRefresh" in providerConfig) {
+        Reflect.deleteProperty(providerConfig, "onAuthRefresh");
+      }
+      pushTrail("mode_change", { provider: config.provider, model: config.model }, runtime.activeIntent);
+      io.notify("info", `Switched model to ${config.provider}/${config.model}.`);
     },
     async shareFile(path: string) {
       if (!state.sharedFiles.includes(path)) {

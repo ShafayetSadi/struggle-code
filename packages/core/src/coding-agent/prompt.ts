@@ -12,7 +12,7 @@ function describeMode(mode: Mode): string {
     ].join(" ");
   }
 
-  if (mode === "full-socratic") {
+  if (mode === "socratic") {
     return [
       "Before any coding, inspect the repo and explain the implementation in phases.",
       "Require the user to explain the architecture, file ownership, and verification path back to you before execution.",
@@ -69,6 +69,9 @@ export function buildSystemPrompt(projectPath: string, mode: Mode, sharedFiles: 
     "- Use list_files or search_files to orient yourself before broad edits.",
     "- Use write_file to create or update files.",
     "- Use run_command for build, test, lint, git, and project inspection commands.",
+    "- For a small file-scoped fix, inspect the named file first and avoid broad repo exploration.",
+    "- Do not install packages, create virtual environments, or diagnose unrelated dependencies unless the user asked for environment help or the task is blocked on a confirmed missing dependency.",
+    "- Prefer a single narrow verification command before any broader investigation.",
     "- Avoid destructive commands unless the user explicitly asks for them.",
     "",
     "Editing rules:",

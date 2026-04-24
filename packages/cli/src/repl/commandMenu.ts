@@ -9,30 +9,29 @@ const TOP_LEVEL_ITEMS: SelectItem[] = [
   { value: "/model", label: "/model", description: "Show the active model" },
   { value: "/copy", label: "/copy", description: "Copy the latest generated output" },
   { value: "/clear", label: "/clear", description: "Clear the transcript" },
-  { value: "/new",   label: "/new",   description: "Start a fresh session" },
+  { value: "/new", label: "/new", description: "Start a fresh session" },
   { value: "/share ", label: "/share", description: "Share a file with the session" },
   { value: "/trail export", label: "/trail export", description: "Export the session trail" },
 ];
 
 const HELP_ITEMS: SelectItem[] = [
-  { value: "/hint",   label: "/hint",   description: "Ask for the next hint" },
+  { value: "/hint", label: "/hint", description: "Ask for the next hint" },
   { value: "/hint 2", label: "/hint 2", description: "Stronger hint" },
   { value: "/hint 3", label: "/hint 3", description: "Strongest hint" },
-  { value: "/stuck",  label: "/stuck",  description: "Start the stuck diagnostic flow" },
+  { value: "/stuck", label: "/stuck", description: "Start the stuck diagnostic flow" },
 ];
 
 const MODE_ITEMS: SelectItem[] = [
-  { value: "/mode guided",       label: "/mode guided",       description: "Guided — step-by-step questions" },
-  { value: "/mode standard",     label: "/mode standard",     description: "Standard — balanced responses" },
-  { value: "/mode full-socratic",label: "/mode full-socratic",description: "Full-socratic — questions only" },
+  { value: "/mode guided", label: "/mode guided", description: "Guided - step-by-step questions" },
+  { value: "/mode standard", label: "/mode standard", description: "Standard - balanced responses" },
+  { value: "/mode full-socratic", label: "/mode full-socratic", description: "Full-socratic - questions only" },
 ];
 
-// All items combined — used for fuzzy fallback search
 const ALL_ITEMS: SelectItem[] = [
   ...TOP_LEVEL_ITEMS,
   ...HELP_ITEMS,
   ...MODE_ITEMS,
-  { value: "/exit",         label: "/exit",         description: "Close the session" },
+  { value: "/exit", label: "/exit", description: "Close the session" },
 ];
 
 export const COMMAND_ITEMS: SelectItem[] = ALL_ITEMS;
@@ -49,9 +48,12 @@ function contextForQuery(query: string): MenuContext {
 
 function itemsForContext(context: MenuContext, query: string): SelectItem[] {
   switch (context) {
-    case "root": return TOP_LEVEL_ITEMS;
-    case "help": return HELP_ITEMS;
-    case "mode": return MODE_ITEMS;
+    case "root":
+      return TOP_LEVEL_ITEMS;
+    case "help":
+      return HELP_ITEMS;
+    case "mode":
+      return MODE_ITEMS;
     case "search": {
       const n = query.trimStart().toLowerCase();
       return ALL_ITEMS.filter((item) => {
@@ -66,10 +68,14 @@ function itemsForContext(context: MenuContext, query: string): SelectItem[] {
 
 function headerForContext(context: MenuContext): string {
   switch (context) {
-    case "root":  return "  Commands";
-    case "help":  return "  /help — hints & stuck";
-    case "mode":  return "  /mode — learning modes";
-    case "search": return "  Search results";
+    case "root":
+      return "  Commands";
+    case "help":
+      return "  /help - hints & stuck";
+    case "mode":
+      return "  /mode - learning modes";
+    case "search":
+      return "  Search results";
   }
 }
 
@@ -95,11 +101,9 @@ export class CommandMenu implements Component {
     this.onCancel = onCancel;
   }
 
-  /** Call this whenever the input field changes so the menu stays in sync. */
   setQuery(query: string): void {
     if (query === this.query) return;
     this.query = query;
-    // Reset selection when the visible list changes
     this.selectedIndex = 0;
   }
 
@@ -131,31 +135,21 @@ export class CommandMenu implements Component {
     const context = contextForQuery(this.query);
     const items = itemsForContext(context, this.query);
     const header = headerForContext(context);
-
-    // Clamp selection in case list shrank
     const safeIndex = Math.min(this.selectedIndex, Math.max(0, items.length - 1));
 
     lines.push(
       chalk.bgHex(P.bgPanel)(
         padToWidth(
           chalk.hex(P.textSecondary)(header) +
-            chalk.hex(P.textMuted)("   up/down · enter select · esc close"),
+            chalk.hex(P.textMuted)("   up/down - enter select - esc close"),
           w
         )
       )
     );
-    lines.push(
-      chalk.bgHex(P.bgPanel)(
-        padToWidth(chalk.hex(P.borderSubtle)("─".repeat(w)), w)
-      )
-    );
+    lines.push(chalk.bgHex(P.bgPanel)(padToWidth(chalk.hex(P.borderSubtle)("-".repeat(w)), w)));
 
     if (items.length === 0) {
-      lines.push(
-        chalk.bgHex(P.bgPanel)(
-          padToWidth(chalk.hex(P.textMuted)("  no matching commands"), w)
-        )
-      );
+      lines.push(chalk.bgHex(P.bgPanel)(padToWidth(chalk.hex(P.textMuted)("  no matching commands"), w)));
     }
 
     for (let i = 0; i < items.length; i++) {

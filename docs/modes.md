@@ -6,7 +6,7 @@ The three supported modes are:
 
 - `guided`
 - `standard`
-- `full-socratic`
+- `socratic`
 
 All three modes use the same underlying tool-capable coding agent. The difference is in how the system prompt steers planning depth, verification pressure, and pacing.
 
@@ -16,7 +16,7 @@ The coding-agent prompt loader reads the blocks below directly. Keep the marker 
 
 - `<!-- mode:guided:start -->` ... `<!-- mode:guided:end -->`
 - `<!-- mode:standard:start -->` ... `<!-- mode:standard:end -->`
-- `<!-- mode:full-socratic:start -->` ... `<!-- mode:full-socratic:end -->`
+- `<!-- mode:socratic:start -->` ... `<!-- mode:socratic:end -->`
 
 Only the selected block is injected into the active system prompt.
 
@@ -57,12 +57,15 @@ Behavior:
 - Get to the relevant file or command quickly.
 - Keep planning terse and spend most of the effort on implementation.
 - Prefer the smallest correct diff that solves the stated task.
+- For a small file-scoped request, inspect that file first instead of exploring the wider repo.
+- Do not turn routine fixes into environment triage unless the request or a verified blocker requires it.
 - Avoid broad rewrites unless the existing structure clearly forces them.
 - Summarize the outcome in a compact way after finishing.
 
 Verification standard:
 
 - Run the smallest useful validation that demonstrates the result.
+- Avoid installs, venv creation, or dependency checks unless they are necessary to complete the stated task.
 - Do not skip obvious verification, but avoid turning routine tasks into full investigations.
 
 Use standard mode for:
@@ -73,10 +76,10 @@ Use standard mode for:
 - quick iteration when the shape of the task is already clear
 <!-- mode:standard:end -->
 
-<!-- mode:full-socratic:start -->
-## Full-Socratic Mode
+<!-- mode:socratic:start -->
+## Socratic Mode
 
-Use `full-socratic` when the main risk is poor reasoning, hidden assumptions, or weak verification.
+Use `socratic` when the main risk is poor reasoning, hidden assumptions, or weak verification.
 
 Behavior:
 
@@ -93,10 +96,10 @@ Verification standard:
 - Verify the riskiest path, not just the happy path.
 - When feasible, check both the implementation result and the surrounding regression surface.
 
-Use full-socratic mode for:
+Use socratic mode for:
 
 - debugging unclear failures
 - risky refactors
 - infra or build issues with multiple possible causes
 - tasks where you want stronger engineering discipline than speed
-<!-- mode:full-socratic:end -->
+<!-- mode:socratic:end -->

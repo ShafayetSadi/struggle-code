@@ -310,6 +310,14 @@ export class SelectList implements Component {
     this.theme = theme;
   }
 
+  selectValue(value: string): void {
+    const index = this.filtered.findIndex((item) => item.value === value);
+    if (index >= 0) {
+      this.selectedIndex = index;
+      this.clampScroll();
+    }
+  }
+
   invalidate(): void {}
 
   handleInput(data: string): void {

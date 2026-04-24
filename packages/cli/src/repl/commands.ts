@@ -29,7 +29,7 @@ export const MODE_MENU_TEXT = `
 Available modes:
   /mode guided              Guided learning with active nudges
   /mode standard            Balanced mode (default)
-  /mode full-socratic       Pure Socratic - questions only, no answers
+  /mode full-socratic       Questions only, no direct answers
 `.trim();
 
 function normalizeHintLevel(value: string | undefined): 1 | 2 | 3 | undefined {
@@ -60,11 +60,11 @@ export function parseSlashCommand(input: string): SlashCommand | undefined {
     case "quit":
       return { kind: "exit" };
     case "model":
-      return { kind: "model" };
+      return args.length > 0 ? { kind: "model", model: args.join(" ") } : { kind: "model" };
     case "mode":
       if (args.length === 0) return { kind: "mode-menu" };
-      if (args[0] === "guided" || args[0] === "standard" || args[0] === "full-socratic") {
-        return { kind: "mode", mode: args[0] };
+      if (args[0] === "guided" || args[0] === "standard" || args[0] === "socratic") {
+        return { kind: "mode", mode: args[0] as Mode };
       }
       return { kind: "mode-menu" };
     case "share":
@@ -118,6 +118,7 @@ export async function handleSlashCommand(
   session: Session,
   projectPath: string,
   replState: ReplState,
+  handleModelCommand: (model?: string) => Promise<string[]>,
   writeLine: (value: string) => void,
   writeLines: (values: string[]) => void
 ): Promise<"continue" | "exit"> {
@@ -131,11 +132,12 @@ export async function handleSlashCommand(
     case "mode-menu":
       writeLines(MODE_MENU_TEXT.split("\n"));
       return "continue";
-    case "model":
-      writeLine(chalk.hex(P.blue)("model switching is not available in-session yet"));
+    case "model": {
+      const modelCmd = command as { kind: "model"; model?: string };
+      writeLines(await handleModelCommand(modelCmd.model));
       return "continue";
+    }
     case "copy":
-      return "continue";
     case "clear":
     case "new":
       return "continue";
