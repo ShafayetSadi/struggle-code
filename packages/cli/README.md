@@ -1,6 +1,6 @@
 # @struggle-ai/cli
 
-Terminal interface for Struggle AI. This package wraps `@struggle-ai/core` with an interactive REPL, slash commands, local config management, and terminal-oriented rendering for learning sessions.
+Terminal interface for Struggle AI. This package wraps `@struggle-ai/core` with an interactive REPL, slash commands, local config management, and terminal-oriented rendering for a local coding agent.
 
 ## Requirements
 
@@ -53,13 +53,19 @@ npm exec --workspace packages/cli struggle -- config show
 - `/trail export [path] [--format md|pdf]` writes the current trail
 - `/exit` quits the REPL
 
+### Mode Behavior
+
+- `guided`: more deliberate planning before edits
+- `standard`: balanced execution with minimal ceremony
+- `full-socratic`: deeper investigation and verification before stopping
+
+These modes now tune the coding agent prompt. They no longer select separate learning-state machines.
+
 ## Rendering Behavior
 
-- text streams inline from core
-- code chunks render as highlighted terminal blocks
-- questions render with a distinct prompt marker
-- ADRs render as a compact terminal summary
-- checkpoints render as section dividers
+- text output renders tool activity and assistant responses
+- question chunks still render with a distinct prompt marker for `/stuck`
+- trail export remains available from the REPL
 
 ## Notes
 

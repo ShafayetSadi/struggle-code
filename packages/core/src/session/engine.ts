@@ -5,6 +5,8 @@ import { renderTrailMarkdown } from "../artifacts/trail.js";
 import { DEFAULT_CONFIGS } from "../config.js";
 import { classifyIntentWithDeps } from "../gate/classifier.js";
 import {
+  type DesignQuestion,
+  buildFallbackDesignQuestions,
   buildGuidedCodeChunk,
   createDesignBriefMarkdown,
   createGuidedState,
@@ -35,6 +37,30 @@ function inferTopic(message: string): string {
 
 function summarizeDesignAnswers(topic: string, answers: string[]): string {
   return `Build ${topic} around a narrow first release focused on ${answers[0] ?? "a single user outcome"}, with a clear workflow, explicit data boundaries, and runtime constraints captured before coding starts.`;
+}
+
+function normalizeDynamicQuestion(raw: string): string | undefined {
+  const question = raw
+    .replace(/^\d+[\].)\s]*/, "")
+    .replace(/^[-*]\s*/, "")
+    .trim();
+  if (!question) return undefined;
+  if (question.length > 160) return undefined;
+  return question.endsWith("?") ? question : `${question}?`;
+}
+
+function parseDynamicInterviewPlan(raw: string): DesignQuestion[] {
+  const questions = raw
+    .split("\n")
+    .map((line) => normalizeDynamicQuestion(line))
+    .filter((line): line is string => Boolean(line));
+
+  return Array.from(new Set(questions))
+    .slice(0, 5)
+    .map((question, index) => ({
+      category: `dynamic_${index + 1}`,
+      question,
+    }));
 }
 
 function createPromptedTextChunk(text: string): ResponseChunk {
@@ -88,6 +114,34 @@ function requireMilestone(runtime: RuntimeSessionContext) {
     throw new Error("Guided flow expected an active milestone but none was available");
   }
   return milestone;
+}
+
+async function deriveGuidedQuestions(
+  topic: string,
+  originalMessage: string,
+  llm: LLMAdapter,
+  io: IO
+): Promise<DesignQuestion[]> {
+  const fallback = buildFallbackDesignQuestions(topic);
+  const prompt = await loadPrompt("design-interview.md", io);
+  const raw = await safeComplete(
+    llm,
+    [
+      { role: "system", content: prompt },
+      {
+        role: "user",
+        content: JSON.stringify({
+          topic,
+          request: originalMessage,
+          fallbackQuestions: fallback.map((question) => question.question),
+        }),
+      },
+    ],
+    fallback.map((question) => question.question).join("\n")
+  );
+
+  const parsed = parseDynamicInterviewPlan(raw);
+  return parsed.length >= 3 ? parsed : fallback;
 }
 
 export async function createSessionEngine(projectPath: string, io: IO, config?: ProviderConfig): Promise<Session> {
@@ -169,7 +223,8 @@ export async function createSessionEngine(projectPath: string, io: IO, config?: 
 
   async function startGuidedProject(message: string): Promise<ResponseChunk[]> {
     const topic = inferTopic(message);
-    runtime.guided = createGuidedState(topic);
+    const questions = await deriveGuidedQuestions(topic, message, llm, io);
+    runtime.guided = createGuidedState(topic, questions);
     runtime.activeIntent = "project";
     deriveDisplayState(state, runtime);
     const question = getCurrentDesignQuestion(runtime.guided);

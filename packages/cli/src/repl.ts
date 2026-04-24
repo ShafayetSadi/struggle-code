@@ -6,7 +6,7 @@ import { CommandMenu } from "./repl/commandMenu.js";
 import { HELP_TEXT, handleSlashCommand, parseSlashCommand, streamChunks, syncHintState } from "./repl/commands.js";
 import { formatChunk, formatPrompt, P, chalk } from "./repl/formatting.js";
 import { createTuiIO } from "./repl/io.js";
-import { ProcessTerminal, TUI, Key } from "./pi-tui/src/index.js";
+import { Key, ProcessTerminal, TUI } from "./pi-tui/src/index.js";
 import { ReplScreen } from "./repl/screen.js";
 import type { ReplState } from "./repl/types.js";
 import { cliIO } from "./ioImpl.js";
@@ -165,8 +165,7 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
         width: "100%",
         minWidth: 50,
         maxHeight: 18,
-        anchor: "top-center",
-        offsetY: -8,
+        anchor: "bottom-center",
       }
     );
   };

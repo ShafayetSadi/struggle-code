@@ -63,6 +63,7 @@ export class CommandMenu implements Component {
     const labelCol = 22;
     const lines: string[] = [];
 
+    lines.push(chalk.bgHex(P.bgPanel)(padToWidth("", w)));
     lines.push(
       chalk.bgHex(P.bgPanel)(
         padToWidth(

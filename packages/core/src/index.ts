@@ -1,8 +1,8 @@
+import { createCodingAgentSession } from "./coding-agent/session.js";
 import { DEFAULT_CONFIGS, resolveProviderConfig } from "./config.js";
 import { classifyIntentWithDeps } from "./gate/classifier.js";
 import { NoopIO } from "./io.js";
 import { createLLMAdapter } from "./llm/adapter.js";
-import { createSessionEngine } from "./session/engine.js";
 import type { ADR, IO, Intent, Mode, ProviderConfig, ResponseChunk, SessionState, TrailEntry } from "./types.js";
 
 export interface Session {
@@ -27,7 +27,7 @@ export async function classifyIntent(message: string): Promise<Intent> {
 
 export async function startSession(projectPath: string, io: IO, config?: ProviderConfig): Promise<Session> {
   const providerConfig = config ?? resolveProviderConfig();
-  return createSessionEngine(projectPath, io, providerConfig);
+  return createCodingAgentSession(projectPath, io, providerConfig);
 }
 
 export { loadConfig, resolveProviderConfig, DEFAULT_CONFIGS } from "./config.js";
