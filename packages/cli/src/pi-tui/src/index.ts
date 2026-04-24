@@ -189,6 +189,26 @@ export class Input implements Component {
 
   invalidate(): void {}
 
+  private insertText(text: string): void {
+    if (text.length === 0) return;
+    this.value =
+      this.value.slice(0, this.cursor) + text + this.value.slice(this.cursor);
+    this.cursor += text.length;
+  }
+
+  private normalizePastedText(data: string): string | undefined {
+    const bracketedPasteMatch = /^\x1b\[200~([\s\S]*)\x1b\[201~$/.exec(data);
+    if (bracketedPasteMatch) {
+      return bracketedPasteMatch[1] ?? "";
+    }
+
+    if (data.includes("\x1b")) {
+      return undefined;
+    }
+
+    return data;
+  }
+
   handleInput(data: string): void {
     switch (data) {
       case Key.enter:
@@ -234,11 +254,15 @@ export class Input implements Component {
         break;
 
       default:
-        // Only accept printable single characters; ignore escape sequences
+        // Accept both typed characters and pasted text blocks.
         if (data.length === 1 && data >= " ") {
-          this.value =
-            this.value.slice(0, this.cursor) + data + this.value.slice(this.cursor);
-          this.cursor++;
+          this.insertText(data);
+          return;
+        }
+
+        const pasted = this.normalizePastedText(data);
+        if (pasted !== undefined) {
+          this.insertText(pasted.replace(/\r\n/g, "\n").replace(/\r/g, "\n"));
         }
     }
   }
@@ -676,7 +700,6 @@ export class TUI {
     this.terminal.enterAlternateScreen();
     this.terminal.clearScreen();
     this.terminal.hideCursor();
-    this.terminal.enableMouseTracking();
 
     if (process.stdin.isTTY) {
       process.stdin.setRawMode(true);
@@ -703,7 +726,6 @@ export class TUI {
   stop(): void {
     this.running = false;
     this.terminal.showCursor();
-    this.terminal.disableMouseTracking();
     this.terminal.exitAlternateScreen();
 
     if (process.stdin.isTTY) {

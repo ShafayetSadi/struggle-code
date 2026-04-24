@@ -1,35 +1,36 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
 import { type Interface, createInterface } from "node:readline/promises";
 
-import { getModels } from "@mariozechner/pi-ai";
 import { DEFAULT_CONFIGS, type IO, type ProviderConfig, startSession } from "@struggle-ai/core";
 
 import { cliIO } from "./ioImpl.js";
 import { Key, ProcessTerminal, TUI } from "./pi-tui/src/index.js";
-import { CommandMenu } from "./repl/commandMenu.js";
-import { HELP_TEXT, handleSlashCommand, parseSlashCommand, streamChunks, syncHintState } from "./repl/commands.js";
-import { P, chalk, formatChunk, formatPrompt } from "./repl/formatting.js";
+import { copyToClipboard } from "./repl/clipboard.js";
+import { HELP_TEXT, ROOT_MENU_TEXT, handleSlashCommand, parseSlashCommand, streamChunks, syncHintState } from "./repl/commands.js";
+import { formatChunk, formatPrompt, P, chalk } from "./repl/formatting.js";
 import { createTuiIO } from "./repl/io.js";
-import { ModelMenu } from "./repl/modelMenu.js";
 import { ReplScreen } from "./repl/screen.js";
-import type { ReplState } from "./repl/types.js";
+import type { ReplState, SlashCommand } from "./repl/types.js";
 
-const CONFIG_DIR = join(homedir(), ".struggle-ai");
-const CONFIG_PATH = join(CONFIG_DIR, "config.json");
+const COMMAND_HINT = "type / for commands";
 
-async function writeConfigFile(path: string, config: ProviderConfig): Promise<void> {
-  const { onAuthRefresh: _ignored, ...serializable } = config;
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${JSON.stringify(serializable, null, 2)}\n`, "utf8");
+function shouldCaptureCommandOutput(command: SlashCommand): boolean {
+  return command.kind !== "root-menu" && command.kind !== "help" && command.kind !== "mode-menu" && command.kind !== "copy";
+}
+
+export interface RunReplOptions {
+  projectPath?: string;
+  io?: IO;
+  config?: ProviderConfig;
+  input?: NodeJS.ReadableStream;
+  output?: NodeJS.WritableStream;
 }
 
 async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> {
   const projectPath = options.projectPath ?? process.cwd();
   const io = options.io ?? cliIO;
-  let currentConfig = options.config ?? DEFAULT_CONFIGS.anthropic;
-  const session = await startSession(projectPath, io, currentConfig);
+  const currentConfig = options.config ?? DEFAULT_CONFIGS.anthropic;
+  let session = await startSession(projectPath, io, currentConfig);
+  let lastGeneratedText: string | undefined;
   const replState: ReplState = {
     hintLevel: 1,
     lastMilestone: session.state.activeMilestone,
@@ -40,8 +41,15 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
     output: options.output ?? process.stdout,
   });
 
+  const handleModelCommand = async (model?: string): Promise<string[]> => {
+    if (!model) {
+      return [`active model ${currentConfig.provider}/${currentConfig.model}`];
+    }
+    return ["model switching is not available in-session yet"];
+  };
+
   process.stdout.write(chalk.hex(P.textPrimary).bold("Struggle AI") + chalk.hex(P.textMuted)("  interactive\n"));
-  process.stdout.write(chalk.hex(P.textMuted)("type /help for commands\n\n"));
+  process.stdout.write(chalk.hex(P.textMuted)(`${COMMAND_HINT}\n\n`));
 
   try {
     while (true) {
@@ -57,46 +65,62 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
       try {
         const command = parseSlashCommand(trimmed);
         if (command) {
-          const handleModelCommand = async (model?: string): Promise<string[]> => {
-            const available = getModels(currentConfig.provider);
-            if (!model) {
-              return available.map((entry) => `${entry.id === currentConfig.model ? "*" : " "} ${entry.id}`);
+          if (command.kind === "copy") {
+            if (!lastGeneratedText) {
+              process.stdout.write(chalk.hex(P.yellow)("nothing to copy yet\n"));
+              continue;
             }
+            await copyToClipboard(lastGeneratedText);
+            process.stdout.write(chalk.hex(P.green)("copied latest output to clipboard\n"));
+            continue;
+          }
+          if (command.kind === "clear") {
+            process.stdout.write("\x1b[2J\x1b[H");
+            process.stdout.write(chalk.hex(P.textMuted)(`${COMMAND_HINT}\n`));
+            continue;
+          }
+          if (command.kind === "new") {
+            session = await startSession(projectPath, io, currentConfig);
+            replState.hintLevel = 1;
+            replState.lastMilestone = session.state.activeMilestone;
+            process.stdout.write(chalk.hex(P.green)("started a fresh session\n"));
+            process.stdout.write(chalk.hex(P.textMuted)(`${COMMAND_HINT}\n`));
+            continue;
+          }
 
-            if (!available.some((entry) => entry.id === model)) {
-              return [`Unknown model for ${currentConfig.provider}: ${model}`];
-            }
-
-            currentConfig = {
-              ...currentConfig,
-              model,
-              apiKeyEnv: DEFAULT_CONFIGS[currentConfig.provider].apiKeyEnv,
-            };
-            session.setProviderConfig(currentConfig);
-            await writeConfigFile(CONFIG_PATH, currentConfig);
-            return [`model set to ${currentConfig.provider}/${currentConfig.model}`];
-          };
+          const commandOutput: string[] = [];
           const status = await handleSlashCommand(
             command,
             session,
             projectPath,
             replState,
             handleModelCommand,
-            (line) => process.stdout.write(`${line}\n`),
+            (line) => {
+              commandOutput.push(line);
+              process.stdout.write(`${line}\n`);
+            },
             (values) => {
+              commandOutput.push(...values);
               for (const v of values) process.stdout.write(`${v}\n`);
             }
           );
+
+          if (shouldCaptureCommandOutput(command) && commandOutput.length > 0) {
+            lastGeneratedText = commandOutput.join("\n").trimEnd();
+          }
+
           if (status === "exit") break;
           continue;
         }
 
-        process.stdout.write(chalk.hex(P.textMuted)("  ◌  thinking…\r"));
+        process.stdout.write(chalk.hex(P.textMuted)("  working...\r"));
+        const responseLines: string[] = [];
         await streamChunks(session.sendMessage(trimmed), (chunk) => {
-          for (const line of formatChunk(chunk)) {
-            process.stdout.write(`${line}\n`);
-          }
+          const lines = formatChunk(chunk);
+          responseLines.push(...lines);
+          for (const line of lines) process.stdout.write(`${line}\n`);
         });
+        lastGeneratedText = responseLines.join("\n").trimEnd();
         syncHintState(session, replState);
         process.stdout.write("\n");
       } catch (error) {
@@ -107,14 +131,6 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
   } finally {
     rl.close();
   }
-}
-
-export interface RunReplOptions {
-  projectPath?: string;
-  io?: IO;
-  config?: ProviderConfig;
-  input?: NodeJS.ReadableStream;
-  output?: NodeJS.WritableStream;
 }
 
 export async function runRepl(options: RunReplOptions = {}): Promise<void> {
@@ -129,7 +145,7 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
 
   const projectPath = options.projectPath ?? process.cwd();
   const baseIO = options.io ?? cliIO;
-  let currentConfig = options.config ?? DEFAULT_CONFIGS.anthropic;
+  const currentConfig = options.config ?? DEFAULT_CONFIGS.anthropic;
   const pending: string[] = [];
   const writeLine = (value: string) => {
     pending.push(value);
@@ -139,7 +155,8 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
   };
 
   const io = createTuiIO(baseIO, writeLine);
-  const session = await startSession(projectPath, io, currentConfig);
+  let session = await startSession(projectPath, io, currentConfig);
+  let lastGeneratedText: string | undefined;
   const replState: ReplState = {
     hintLevel: 1,
     lastMilestone: session.state.activeMilestone,
@@ -147,22 +164,30 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
 
   const terminal = new ProcessTerminal();
   const tui = new TUI(terminal);
-  let commandMenuOpen = false;
-  let modelMenuOpen = false;
 
   let resolveExit: (() => void) | undefined;
   const exited = new Promise<void>((resolve) => {
     resolveExit = resolve;
   });
 
-  const modelLabel = `${currentConfig.provider}/${currentConfig.model}`;
+  const screen = new ReplScreen(
+    session.state.mode,
+    projectPath,
+    `${currentConfig.provider}/${currentConfig.model}`,
+    (value) => {
+      void submitValue(value);
+    }
+  );
 
-  const screen = new ReplScreen(session.state.mode, projectPath, modelLabel, (value) => {
-    void submitValue(value);
-  });
+  const handleModelCommand = async (model?: string): Promise<string[]> => {
+    if (!model) {
+      return [`active model ${currentConfig.provider}/${currentConfig.model}`];
+    }
+    return ["model switching is not available in-session yet"];
+  };
 
   for (const line of pending.splice(0)) screen.append("system", line);
-  screen.append("system", "type /help for commands");
+  screen.append("system", COMMAND_HINT);
 
   tui.addChild(screen);
   tui.setFocus(screen);
@@ -170,81 +195,6 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
   const close = () => {
     tui.stop();
     resolveExit?.();
-  };
-
-  const openCommandMenu = () => {
-    if (commandMenuOpen) return;
-    commandMenuOpen = true;
-
-    const overlay = tui.showOverlay(
-      new CommandMenu(
-        (item) => {
-          overlay.hide();
-          commandMenuOpen = false;
-          tui.setFocus(screen);
-
-          const selfExecuting = new Set(["/exit", "/stuck", "/hint", "/hint 2", "/hint 3", "/trail export"]);
-          if (item.value === "/model") {
-            openModelMenu();
-            return;
-          }
-          if (selfExecuting.has(item.value) || item.value.startsWith("/mode ")) {
-            void submitValue(item.value);
-            return;
-          }
-          screen.setInputValue(item.value);
-          tui.requestRender();
-        },
-        () => {
-          overlay.hide();
-          commandMenuOpen = false;
-          tui.setFocus(screen);
-          tui.requestRender();
-        }
-      ),
-      {
-        width: "100%",
-        minWidth: 50,
-        maxHeight: 18,
-        anchor: "bottom-center",
-      }
-    );
-  };
-
-  const openModelMenu = () => {
-    if (modelMenuOpen) return;
-    modelMenuOpen = true;
-
-    const items = getModels(currentConfig.provider).map((model) => ({
-      value: model.id,
-      label: model.id,
-      ...(model.id === currentConfig.model ? { description: "current" } : {}),
-    }));
-
-    const overlay = tui.showOverlay(
-      new ModelMenu(
-        items,
-        currentConfig.model,
-        (item) => {
-          overlay.hide();
-          modelMenuOpen = false;
-          tui.setFocus(screen);
-          void submitValue(`/model ${item.value}`);
-        },
-        () => {
-          overlay.hide();
-          modelMenuOpen = false;
-          tui.setFocus(screen);
-          tui.requestRender();
-        }
-      ),
-      {
-        width: "100%",
-        minWidth: 50,
-        maxHeight: 16,
-        anchor: "bottom-center",
-      }
-    );
   };
 
   const refreshSessionState = () => {
@@ -267,79 +217,109 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
       return;
     }
 
-    screen.clearInput();
-    screen.append("user", trimmed);
-    screen.setBusy(true);
-    tui.requestRender();
-
     try {
       const command = parseSlashCommand(trimmed);
       if (command) {
-        const handleModelCommand = async (model?: string): Promise<string[]> => {
-          const available = getModels(currentConfig.provider);
-          if (!model) {
-            openModelMenu();
-            return [];
-          }
-
-          if (!available.some((entry) => entry.id === model)) {
-            return [`Unknown model for ${currentConfig.provider}: ${model}`];
-          }
-
-          currentConfig = {
-            ...currentConfig,
-            model,
-            apiKeyEnv: DEFAULT_CONFIGS[currentConfig.provider].apiKeyEnv,
-          };
-          session.setProviderConfig(currentConfig);
-          await writeConfigFile(CONFIG_PATH, currentConfig);
-          return [`model set to ${currentConfig.provider}/${currentConfig.model}`];
-        };
-        if (command.kind === "help") {
-          openCommandMenu();
+        if (command.kind === "root-menu" || command.kind === "help" || command.kind === "mode-menu") {
+          screen.setInputValue(
+            command.kind === "root-menu" ? "/" : command.kind === "help" ? "/help " : "/mode "
+          );
+          tui.requestRender();
           return;
         }
+
+        screen.clearInput();
+        screen.setBusy(true);
+        tui.requestRender();
+
+        if (command.kind === "copy") {
+          if (!lastGeneratedText) {
+            screen.append("system", "nothing to copy yet");
+            return;
+          }
+          await copyToClipboard(lastGeneratedText);
+          screen.append("system", "copied latest output to clipboard");
+          return;
+        }
+        if (command.kind === "clear") {
+          screen.clearEntries();
+          screen.append("system", "transcript cleared");
+          screen.append("system", COMMAND_HINT);
+          return;
+        }
+        if (command.kind === "new") {
+          screen.clearEntries();
+          session = await startSession(projectPath, io, currentConfig);
+          replState.hintLevel = 1;
+          replState.lastMilestone = session.state.activeMilestone;
+          screen.setMode(session.state.mode);
+          screen.setActiveSubProblem(session.state.activeSubProblem);
+          screen.append("system", "started a fresh session");
+          screen.append("system", COMMAND_HINT);
+          return;
+        }
+
+        const commandOutput: string[] = [];
+        const trackedWriteLine = (line: string) => {
+          commandOutput.push(line);
+          writeLine(line);
+        };
+        const trackedWriteLines = (values: string[]) => {
+          commandOutput.push(...values);
+          writeLines(values);
+        };
+
         const status = await handleSlashCommand(
           command,
           session,
           projectPath,
           replState,
           handleModelCommand,
-          writeLine,
-          writeLines
+          trackedWriteLine,
+          trackedWriteLines
         );
+
+        if (shouldCaptureCommandOutput(command) && commandOutput.length > 0) {
+          lastGeneratedText = commandOutput.join("\n").trimEnd();
+        }
+
         flushPending();
         refreshSessionState();
         if (status === "exit") {
           close();
-          return;
         }
-      } else {
-        screen.startThinking(() => tui.requestRender());
-        tui.requestRender();
-
-        let firstChunk = true;
-
-        await streamChunks(session.sendMessage(trimmed), (chunk) => {
-          if (firstChunk) {
-            firstChunk = false;
-            screen.stopThinking();
-            screen.startStreaming(() => tui.requestRender());
-          }
-
-          const chunkLines = formatChunk(chunk);
-          screen.appendStreamChunk(chunkLines.join("\n"));
-          tui.requestRender();
-        });
-
-        if (firstChunk) {
-          screen.stopThinking();
-        }
-        screen.stopStreaming();
-
-        syncHintState(session, replState);
-        refreshSessionState();
+        return;
       }
+
+      screen.clearInput();
+      screen.append("user", trimmed);
+      screen.setBusy(true);
+      screen.startThinking(() => tui.requestRender());
+      tui.requestRender();
+
+      let firstChunk = true;
+      const responseLines: string[] = [];
+      await streamChunks(session.sendMessage(trimmed), (chunk) => {
+        if (firstChunk) {
+          firstChunk = false;
+          screen.stopThinking();
+          screen.startStreaming(() => tui.requestRender());
+        }
+
+        const chunkLines = formatChunk(chunk);
+        responseLines.push(...chunkLines);
+        screen.appendStreamChunk(chunkLines.join("\n"));
+        tui.requestRender();
+      });
+
+      if (firstChunk) {
+        screen.stopThinking();
+      }
+      screen.stopStreaming();
+      lastGeneratedText = responseLines.join("\n").trimEnd();
+
+      syncHintState(session, replState);
+      refreshSessionState();
     } catch (error) {
       screen.stopThinking();
       screen.stopStreaming();
@@ -369,4 +349,4 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
   }
 }
 
-export { HELP_TEXT, formatPrompt, parseSlashCommand };
+export { HELP_TEXT, ROOT_MENU_TEXT, formatPrompt, parseSlashCommand };
