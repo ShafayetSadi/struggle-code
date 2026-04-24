@@ -80,4 +80,124 @@ describe("config store logout", () => {
       expect(authStore["openai-codex"]).toBeUndefined();
     });
   });
+
+  it("attaches stored API-key auth for the active provider", async () => {
+    await withTempHome(async (home) => {
+      const configDir = join(home, ".struggle-ai");
+      await mkdir(configDir, { recursive: true });
+      await writeFile(
+        join(configDir, "config.json"),
+        `${JSON.stringify(
+          {
+            provider: "openrouter",
+            model: "openai/gpt-oss-20b",
+            apiKeyEnv: "OPENROUTER_API_KEY",
+          },
+          null,
+          2
+        )}\n`,
+        "utf8"
+      );
+      await writeFile(
+        join(configDir, "auth.json"),
+        `${JSON.stringify(
+          {
+            openrouter: {
+              type: "api-key",
+              apiKey: "sk-or-test",
+            },
+          },
+          null,
+          2
+        )}\n`,
+        "utf8"
+      );
+
+      const { getCurrentConfig } = await import("../src/configStore.js");
+      const config = await getCurrentConfig();
+
+      expect(config).toEqual({
+        provider: "openrouter",
+        model: "openai/gpt-oss-20b",
+        apiKeyEnv: "OPENROUTER_API_KEY",
+        auth: {
+          type: "api-key",
+          apiKey: "sk-or-test",
+        },
+        onAuthRefresh: expect.any(Function),
+      });
+    });
+  });
+
+  it("builds provider-specific config with stored auth when switching providers", async () => {
+    await withTempHome(async (home) => {
+      const configDir = join(home, ".struggle-ai");
+      await mkdir(configDir, { recursive: true });
+      await writeFile(
+        join(configDir, "auth.json"),
+        `${JSON.stringify(
+          {
+            "openai-codex": {
+              type: "oauth",
+              refresh: "refresh-token",
+              access: "access-token",
+              expires: Date.now() + 60_000,
+            },
+          },
+          null,
+          2
+        )}\n`,
+        "utf8"
+      );
+
+      const { getConfigForProvider } = await import("../src/configStore.js");
+      const config = await getConfigForProvider("openai-codex");
+
+      expect(config).toEqual({
+        provider: "openai-codex",
+        model: "gpt-5.2-codex",
+        apiKeyEnv: "OPENAI_CODEX_OAUTH",
+        auth: {
+          type: "oauth",
+          credentials: {
+            refresh: "refresh-token",
+            access: "access-token",
+            expires: expect.any(Number),
+          },
+        },
+        onAuthRefresh: expect.any(Function),
+      });
+    });
+  });
+
+  it("lists only providers with saved credentials", async () => {
+    await withTempHome(async (home) => {
+      const configDir = join(home, ".struggle-ai");
+      await mkdir(configDir, { recursive: true });
+      await writeFile(
+        join(configDir, "auth.json"),
+        `${JSON.stringify(
+          {
+            openrouter: {
+              type: "api-key",
+              apiKey: "sk-or-test",
+            },
+            "openai-codex": {
+              type: "oauth",
+              refresh: "refresh-token",
+              access: "access-token",
+              expires: Date.now() + 60_000,
+            },
+          },
+          null,
+          2
+        )}\n`,
+        "utf8"
+      );
+
+      const { listAuthenticatedProviders } = await import("../src/configStore.js");
+
+      await expect(listAuthenticatedProviders()).resolves.toEqual(["openai-codex", "openrouter"]);
+    });
+  });
 });

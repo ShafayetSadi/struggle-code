@@ -184,7 +184,12 @@ export class ReplScreen {
         const current = currentRaw.trimEnd().toLowerCase();
         const selected = matches[this.commandSelection];
         const selectedValue = selected?.value.trimEnd().toLowerCase();
-        const isSubmenuTrigger = current === "/help" || current === "/mode";
+        const isSubmenuTrigger =
+          current === "/help" ||
+          current === "/login" ||
+          current === "/providers" ||
+          current === "/provider" ||
+          current === "/mode";
         const isInsideSubmenu = /\s$/.test(currentRaw);
 
         if (selected && (isInsideSubmenu || (!isSubmenuTrigger && selectedValue !== current))) {

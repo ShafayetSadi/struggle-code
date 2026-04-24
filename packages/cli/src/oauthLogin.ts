@@ -1,37 +1,75 @@
-import { createInterface, type Interface } from "node:readline/promises";
-
 import { loginAntigravity, loginOpenAICodex, type OAuthPrompt } from "@mariozechner/pi-ai/oauth";
-import type { Provider } from "@struggle-ai/core";
+import { DEFAULT_CONFIGS, type Provider } from "@struggle-ai/core";
 import { InvalidArgumentError } from "commander";
 
-import { AUTH_PATH, OAUTH_PROVIDERS, saveOAuthCredentials } from "./configStore.js";
+import { AUTH_PATH, OAUTH_PROVIDERS, saveOAuthCredentials, saveProviderAuth } from "./configStore.js";
+import { copyToClipboard } from "./repl/clipboard.js";
+import type { LoginIO } from "./repl/loginOverlay.js";
 
-export async function runOAuthLogin(provider: Provider): Promise<void> {
-  if (!OAUTH_PROVIDERS.has(provider)) {
-    throw new InvalidArgumentError(`Provider does not support OAuth login: ${provider}`);
-  }
+interface ConsoleLoginIO extends LoginIO {
+  close(): void;
+}
 
-  const rl: Interface = createInterface({
+async function createConsoleLoginIO(): Promise<ConsoleLoginIO> {
+  const { createInterface } = await import("node:readline/promises");
+  const rl = createInterface({
     input: process.stdin,
     output: process.stdout,
   });
 
+  return {
+    close: () => rl.close(),
+    prompt: (message: string) => rl.question(`${message}: `),
+    writeLine: (message: string) => {
+      process.stdout.write(`${message}\n`);
+    },
+    writeLink: (_label: string, url: string) => {
+      process.stdout.write(`${url}\n`);
+    },
+  };
+}
+
+export async function runProviderLogin(provider: Provider, io?: LoginIO): Promise<void> {
+  const loginIO = io ?? (await createConsoleLoginIO());
+
   const onAuth = (info: { url: string; instructions?: string }) => {
-    process.stdout.write(`Open this URL to continue authentication:\n${info.url}\n`);
+    loginIO.writeLine("Open this URL to continue authentication:");
+    loginIO.writeLink("Authentication URL ready.", info.url);
+    void copyToClipboard(info.url)
+      .then(() => {
+        loginIO.writeLine("Authentication URL copied to clipboard.");
+      })
+      .catch(() => {
+        loginIO.writeLine("Clipboard copy unavailable. Use the browser-opened auth page or copy the URL manually.");
+      });
     if (info.instructions) {
-      process.stdout.write(`${info.instructions}\n`);
+      loginIO.writeLine(info.instructions);
     }
   };
 
   const onProgress = (message: string) => {
-    process.stdout.write(`${message}\n`);
+    loginIO.writeLine(message);
   };
 
   const onManualCodeInput = async (): Promise<string> => {
-    return rl.question("Paste the redirected URL/code and press Enter: ");
+    return loginIO.prompt("Paste the redirected URL/code and press Enter");
   };
 
   try {
+    if (!OAUTH_PROVIDERS.has(provider)) {
+      const envVar = DEFAULT_CONFIGS[provider].apiKeyEnv;
+      const apiKey = (await loginIO.prompt(`Paste API key for ${provider} (${envVar})`)).trim();
+      if (!apiKey) {
+        throw new InvalidArgumentError(`API key is required for ${provider}`);
+      }
+      await saveProviderAuth(provider, {
+        type: "api-key",
+        apiKey,
+      });
+      loginIO.writeLine(`Saved credentials to ${AUTH_PATH}`);
+      return;
+    }
+
     if (provider === "openai-codex") {
       const credentials = await loginOpenAICodex({
         onAuth,
@@ -44,23 +82,25 @@ export async function runOAuthLogin(provider: Provider): Promise<void> {
           } else if ("message" in prompt && typeof prompt.message === "string") {
             message = prompt.message;
           }
-          return rl.question(`${message}: `);
+          return loginIO.prompt(message);
         },
       });
       await saveOAuthCredentials(provider, credentials);
-      process.stdout.write(`Saved OAuth credentials to ${AUTH_PATH}\n`);
+      loginIO.writeLine(`Saved OAuth credentials to ${AUTH_PATH}`);
       return;
     }
 
     if (provider === "google-antigravity") {
       const credentials = await loginAntigravity(onAuth, onProgress, onManualCodeInput);
       await saveOAuthCredentials(provider, credentials);
-      process.stdout.write(`Saved OAuth credentials to ${AUTH_PATH}\n`);
+      loginIO.writeLine(`Saved OAuth credentials to ${AUTH_PATH}`);
       return;
     }
 
     throw new InvalidArgumentError(`OAuth login is not implemented for ${provider}`);
   } finally {
-    rl.close();
+    if ("close" in loginIO && typeof loginIO.close === "function") {
+      loginIO.close();
+    }
   }
 }

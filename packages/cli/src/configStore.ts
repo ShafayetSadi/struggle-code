@@ -16,7 +16,16 @@ export const CONFIG_PATH = join(CONFIG_DIR, "config.json");
 export const AUTH_PATH = join(CONFIG_DIR, "auth.json");
 export const OAUTH_PROVIDERS = new Set<Provider>(["openai-codex", "google-antigravity"]);
 
-type StoredOAuthMap = Partial<Record<Provider, { type: "oauth" } & OAuthCredentials>>;
+type StoredAuthMap = Partial<
+  Record<Provider, ({ type: "oauth" } & OAuthCredentials) | { type: "api-key"; apiKey: string }>
+>;
+
+export async function listAuthenticatedProviders(): Promise<Provider[]> {
+  const authStore = await readAuthStore();
+  return Object.keys(authStore)
+    .filter((provider): provider is Provider => provider in DEFAULT_CONFIGS)
+    .sort((a, b) => a.localeCompare(b));
+}
 
 export async function readConfigFile(path: string): Promise<string | undefined> {
   try {
@@ -36,29 +45,50 @@ export async function writeConfigFile(path: string, config: ProviderConfig): Pro
   await writeJsonFile(path, serializable);
 }
 
-export async function readAuthStore(): Promise<StoredOAuthMap> {
+export async function readAuthStore(): Promise<StoredAuthMap> {
   const raw = await readConfigFile(AUTH_PATH);
   if (!raw) {
     return {};
   }
 
-  return JSON.parse(raw) as StoredOAuthMap;
+  return JSON.parse(raw) as StoredAuthMap;
 }
 
-async function writeAuthStore(store: StoredOAuthMap): Promise<void> {
+async function writeAuthStore(store: StoredAuthMap): Promise<void> {
   await writeJsonFile(AUTH_PATH, store);
 }
 
-export async function saveOAuthCredentials(provider: Provider, credentials: OAuthCredentials): Promise<void> {
+export async function saveProviderAuth(provider: Provider, auth: ProviderAuth): Promise<void> {
   const store = await readAuthStore();
-  store[provider] = { type: "oauth", ...credentials };
+  store[provider] =
+    auth.type === "oauth" ? { type: "oauth", ...auth.credentials } : { type: "api-key", apiKey: auth.apiKey };
   await writeAuthStore(store);
 }
 
-export function attachRuntimeAuth(config: ProviderConfig, authStore: StoredOAuthMap): ProviderConfig {
+export async function saveOAuthCredentials(provider: Provider, credentials: OAuthCredentials): Promise<void> {
+  await saveProviderAuth(provider, {
+    type: "oauth",
+    credentials,
+  });
+}
+
+export function attachRuntimeAuth(config: ProviderConfig, authStore: StoredAuthMap): ProviderConfig {
   const storedAuth = authStore[config.provider];
   if (!storedAuth) {
     return config;
+  }
+
+  if (storedAuth.type === "api-key") {
+    return {
+      ...config,
+      auth: {
+        type: "api-key",
+        apiKey: storedAuth.apiKey,
+      },
+      onAuthRefresh: async (auth: ProviderAuth) => {
+        await saveProviderAuth(config.provider, auth);
+      },
+    };
   }
 
   return {
@@ -76,9 +106,7 @@ export function attachRuntimeAuth(config: ProviderConfig, authStore: StoredOAuth
       },
     },
     onAuthRefresh: async (auth: ProviderAuth) => {
-      if (auth.type === "oauth") {
-        await saveOAuthCredentials(config.provider, auth.credentials);
-      }
+      await saveProviderAuth(config.provider, auth);
     },
   };
 }
@@ -93,6 +121,16 @@ export async function getCurrentConfig(): Promise<ProviderConfig> {
   ]);
 
   return attachRuntimeAuth(configValue, authStore);
+}
+
+export async function getConfigForProvider(provider: Provider): Promise<ProviderConfig> {
+  const authStore = await readAuthStore();
+  return attachRuntimeAuth(
+    {
+      ...DEFAULT_CONFIGS[provider],
+    },
+    authStore
+  );
 }
 
 export async function clearSavedAuth(provider: Provider): Promise<void> {
