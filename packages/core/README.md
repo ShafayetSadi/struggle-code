@@ -109,11 +109,11 @@ console.log(chunks);
 
 ### Modes
 
-Modes now tune agent behavior instead of running separate learning state machines:
+Modes now change the live runtime behavior:
 
-- `guided`: more deliberate planning before edits
-- `standard`: balanced execution with minimal ceremony
-- `full-socratic`: deeper investigation and verification before stopping
+- `guided`: inspect the repo, explain the implementation phases and file ownership, then execute
+- `standard`: behave like a normal coding agent with minimal ceremony
+- `full-socratic`: explain the implementation phases, require the user to explain the design back, then execute only after validation
 
 ## Agent Tools
 
@@ -132,10 +132,12 @@ All file tools are restricted to the session project root. `run_command` also ex
 `sendMessage()` yields structured chunks. In the current coding-agent runtime, most output is emitted as `text` chunks:
 
 - tool activity summaries such as `[tool] read_file src/index.ts`
+- guided or full-socratic plan explanations before coding begins
+- full-socratic validation prompts before execution
 - assistant responses after tool use
 - hint and stuck-session messages
 
-The legacy chunk variants still exist in the public type for compatibility, but the coding-agent runtime does not currently emit ADR, checkpoint, or sub-problem chunks.
+The public `ResponseChunk` type still includes richer variants, but the live coding-agent runtime currently uses text-first streaming for the mode orchestration and execution flow.
 
 ## Trail Export
 
@@ -149,7 +151,7 @@ Exported trails include:
 
 ## Prompt Assets
 
-Prompt files in [`src/prompts`](./src/prompts) are still used by the legacy helper modules such as `classifyIntent()` and `createLLMAdapter()`-based flows. The coding-agent session runtime itself uses a generated system prompt instead.
+Prompt files in [`src/prompts`](./src/prompts) are still used by helper modules such as `classifyIntent()` and `createLLMAdapter()`-based flows. The coding-agent session runtime itself uses a generated system prompt plus internal planning and validation prompts for guided and full-socratic mode.
 
 ## Notes for Consumers
 

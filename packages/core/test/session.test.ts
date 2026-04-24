@@ -93,7 +93,7 @@ describe("coding agent session", () => {
     MockAgentClass.instances.length = 0;
   });
 
-  it("streams tool activity and the final assistant response as text chunks", async () => {
+  it("runs standard mode as a direct coding agent", async () => {
     MockAgentClass.events = [
       {
         type: "tool_execution_start",
@@ -162,6 +162,7 @@ describe("coding agent session", () => {
 
     const io = new MemoryIO();
     const session = await startSession("/tmp/project", io);
+    session.setMode("standard");
     const chunks = await collectChunks(session.sendMessage("Inspect src/index.ts and implement the fix"));
 
     expect(chunks).toEqual([
@@ -169,8 +170,9 @@ describe("coding agent session", () => {
       { kind: "text", value: "[tool] read_file completed\n" },
       { kind: "text", value: "Implemented the change.\n" },
     ]);
-    expect(session.state.activeMilestone).toBe("Coding agent (guided)");
+    expect(session.state.activeMilestone).toBe("Direct coding execution");
     expect(session.state.activeSubProblem).toBe("Ready for the next coding task");
+    expect(session.state.modePhase).toBe("idle");
     expect(session.getTrail().some((entry) => entry.type === "bypass")).toBe(true);
   });
 
@@ -187,16 +189,257 @@ describe("coding agent session", () => {
       "write_file",
     ]);
     expect(agent.systemPrompt).toContain(
-      "Use `guided` when you want the agent to behave like a careful senior engineer"
+      "Start by inspecting the relevant code and building a concrete implementation plan before any coding."
     );
 
     session.setMode("full-socratic");
     expect(agent.thinkingLevel).toBe("high");
     expect(agent.systemPrompt).toContain("Current mode: full-socratic.");
-    expect(agent.systemPrompt).toContain("Decompose the problem internally before editing.");
+    expect(agent.systemPrompt).toContain(
+      "Before any coding, require the user to explain the architecture, file ownership, and verification path back in their own words."
+    );
 
     await session.shareFile("/tmp/project/src/app.ts");
     expect(agent.systemPrompt).toContain("/tmp/project/src/app.ts");
+  });
+
+  it("pauses guided mode after the plan and before each phase execution", async () => {
+    MockAgentClass.events = [
+      {
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "Implemented the approved plan." }],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+      },
+      {
+        type: "turn_end",
+        message: {
+          role: "assistant",
+          content: [],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+        toolResults: [],
+      },
+    ];
+
+    const io = new MemoryIO();
+    const session = await startSession("/tmp/project", io);
+    const firstTurn = await collectChunks(
+      session.sendMessage("Implement distinct mode behavior for the coding agent.")
+    );
+
+    expect(firstTurn[0]).toEqual(
+      expect.objectContaining({
+        kind: "text",
+        value: expect.stringContaining("Guided mode is mapping the work before any coding starts."),
+      })
+    );
+    expect(
+      firstTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("Guided mode is ready for phase 1"))
+    ).toBe(true);
+    expect(firstTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("Do you understand phase 1"))).toBe(
+      true
+    );
+    expect(MockAgentClass.instances[0]?.messages).toHaveLength(0);
+    expect(session.state.modePhase).toBe("awaiting-approval");
+
+    const secondTurn = await collectChunks(session.sendMessage("yes, go ahead"));
+    expect(secondTurn[0]).toEqual(
+      expect.objectContaining({
+        kind: "text",
+        value: expect.stringContaining("Executing phase 1"),
+      })
+    );
+    expect(
+      secondTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("Implemented the approved plan."))
+    ).toBe(true);
+    expect(
+      secondTurn.some(
+        (chunk) => chunk.kind === "text" && chunk.value.includes("Phase completed. I’m pausing before the next phase.")
+      )
+    ).toBe(true);
+    expect(
+      secondTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("Guided mode is ready for phase 2"))
+    ).toBe(true);
+    expect(MockAgentClass.instances[0]?.messages[0]).toContain("Execute only phase 1");
+    expect(session.state.activeMilestone).toBe("Guided build-up");
+    expect(session.state.modePhase).toBe("awaiting-approval");
+  });
+
+  it("does not enter guided planning for quick-help questions", async () => {
+    MockAgentClass.events = [
+      {
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "An array is an ordered collection of values." }],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+      },
+      {
+        type: "turn_end",
+        message: {
+          role: "assistant",
+          content: [],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+        toolResults: [],
+      },
+    ];
+
+    const io = new MemoryIO();
+    const session = await startSession("/tmp/project", io);
+    const chunks = await collectChunks(session.sendMessage("what is an array?"));
+
+    expect(chunks).toEqual([{ kind: "text", value: "An array is an ordered collection of values.\n" }]);
+    expect(chunks.some((chunk) => chunk.kind === "text" && chunk.value.includes("Guided mode is mapping"))).toBe(false);
+    expect(MockAgentClass.instances[0]?.messages).toEqual(["what is an array?"]);
+    expect(session.state.modePhase).toBe("idle");
+  });
+
+  it("blocks full-socratic execution until the user demonstrates understanding", async () => {
+    MockAgentClass.events = [
+      {
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "Executed after validation." }],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+      },
+      {
+        type: "turn_end",
+        message: {
+          role: "assistant",
+          content: [],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+        toolResults: [],
+      },
+    ];
+
+    const io = new MemoryIO();
+    const session = await startSession("/tmp/project", io);
+    session.setMode("full-socratic");
+
+    const firstTurn = await collectChunks(
+      session.sendMessage("Implement distinct mode behavior for the coding agent.")
+    );
+    expect(
+      firstTurn.some(
+        (chunk) =>
+          chunk.kind === "text" &&
+          chunk.value.includes("Full-socratic mode is mapping the work before any coding starts.")
+      )
+    ).toBe(true);
+    expect(firstTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("Before I execute the plan"))).toBe(
+      true
+    );
+    expect(MockAgentClass.instances[0]?.messages).toHaveLength(0);
+    expect(session.state.modePhase).toBe("awaiting-validation");
+
+    const secondTurn = await collectChunks(session.sendMessage("I do not know yet."));
+    expect(secondTurn).toEqual([
+      expect.objectContaining({
+        kind: "text",
+        value: expect.stringContaining("Tighten the explanation around"),
+      }),
+    ]);
+    expect(MockAgentClass.instances[0]?.messages).toHaveLength(0);
+    expect(session.state.modePhase).toBe("awaiting-validation");
+
+    const thirdTurn = await collectChunks(
+      session.sendMessage(
+        "The mode contract lives in docs/modes.md, the runtime is wired in coding-agent/session.ts, and I would verify the behavior with the session tests."
+      )
+    );
+    expect(thirdTurn[0]).toEqual(
+      expect.objectContaining({
+        kind: "text",
+        value: "Validation passed. I’m executing the approved plan now.\n",
+      })
+    );
+    expect(thirdTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("Executed after validation."))).toBe(
+      true
+    );
+    expect(MockAgentClass.instances[0]?.messages[0]).toContain(
+      "Execution context: this request is running in full-socratic mode."
+    );
+    expect(session.state.modePhase).toBe("idle");
   });
 
   it("exports a markdown trail and warns when pdf is requested", async () => {

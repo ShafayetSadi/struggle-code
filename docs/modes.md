@@ -27,11 +27,11 @@ Use `guided` when you want the agent to behave like a careful senior engineer ra
 
 Behavior:
 
-- Start by inspecting the relevant code and naming the plan briefly before major edits.
-- Prefer understanding the current design and constraints before changing files.
-- Make the smallest credible implementation plan visible to the user before broad changes.
-- When the task is ambiguous, resolve ambiguity by reading code and running narrow commands instead of guessing.
-- After edits, explain what changed, why it was the right boundary, and what was verified.
+- Start by inspecting the relevant code and building a concrete implementation plan before any coding.
+- Explain how the project will work, which phases will happen, and what each phase is responsible for.
+- Name the files or modules the agent expects to create or update and why each one matters.
+- Then execute the plan as a normal coding agent, preserving the explained structure unless repo reality forces a better boundary.
+- After edits, explain what changed, why that boundary was chosen, and what was verified.
 
 Verification standard:
 
@@ -53,6 +53,7 @@ Use `standard` when you want fast, pragmatic execution with minimal ceremony.
 
 Behavior:
 
+- Behave like a normal coding agent.
 - Get to the relevant file or command quickly.
 - Keep planning terse and spend most of the effort on implementation.
 - Prefer the smallest correct diff that solves the stated task.
@@ -79,11 +80,11 @@ Use `full-socratic` when the main risk is poor reasoning, hidden assumptions, or
 
 Behavior:
 
-- Decompose the problem internally before editing.
-- Validate assumptions with file reads, searches, and commands before committing to a change.
-- Explicitly pressure-test boundaries, invariants, and likely regressions.
-- Prefer proving the approach over moving quickly.
-- Keep the final explanation concise even if the internal reasoning process is deeper.
+- Start with the same phased implementation explanation as guided mode.
+- Before any coding, require the user to explain the architecture, file ownership, and verification path back in their own words.
+- If the explanation is weak, ask follow-up questions and keep execution blocked until the user demonstrates understanding.
+- Once the user passes validation, execute like a rigorous coding agent and pressure-test the riskiest boundaries.
+- Keep the final explanation concise even though the learning loop is deeper.
 
 Verification standard:
 

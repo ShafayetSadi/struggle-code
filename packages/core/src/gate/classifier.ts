@@ -16,7 +16,9 @@ export function fallbackIntentHeuristic(message: string): Intent {
     return "debug";
   }
   if (
-    /help me build|build|create|make|project|app|website|service|api|system|dashboard|platform|feature|tool/.test(lower)
+    /help me build|build|create|make|implement|ship|project|app|website|service|api|system|dashboard|platform|feature|tool/.test(
+      lower
+    )
   ) {
     return "project";
   }

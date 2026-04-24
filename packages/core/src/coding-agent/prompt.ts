@@ -6,24 +6,24 @@ import type { Mode } from "../types.js";
 function describeMode(mode: Mode): string {
   if (mode === "guided") {
     return [
-      "Work carefully and narrate the plan briefly before major edits.",
-      "Inspect relevant files before changing them.",
-      "After edits, explain what changed and why in concise terms.",
+      "Before any coding, inspect the repo and explain the build-up in phases.",
+      "Name how the project will work, which files you expect to write, and why each file owns that responsibility.",
+      "Then implement against that explained plan and summarize what changed.",
     ].join(" ");
   }
 
   if (mode === "full-socratic") {
     return [
-      "Work in a maximally rigorous way.",
-      "Break the task into explicit sub-problems internally, validate assumptions with tools, and verify the riskiest paths before you stop.",
-      "Keep the final answer concise despite the deeper investigation.",
+      "Before any coding, inspect the repo and explain the implementation in phases.",
+      "Require the user to explain the architecture, file ownership, and verification path back to you before execution.",
+      "Only then implement rigorously and verify the riskiest paths before you stop.",
     ].join(" ");
   }
 
   return [
-    "Work directly and pragmatically.",
+    "Behave like a normal coding agent.",
     "Use tools to inspect, edit, and verify with minimal ceremony.",
-    "Prefer the smallest correct change that solves the task.",
+    "Prefer the smallest correct change that solves the task directly.",
   ].join(" ");
 }
 

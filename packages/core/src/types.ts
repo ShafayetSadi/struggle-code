@@ -12,6 +12,7 @@ export interface SessionState {
   id: string;
   projectPath: string;
   mode: Mode;
+  modePhase?: "idle" | "planning" | "awaiting-approval" | "awaiting-validation" | "executing" | "verifying";
   understandingScore: number; // 0-100
   activeMilestone?: string;
   activeSubProblem?: string;
@@ -59,12 +60,39 @@ export interface ADR {
   createdAt: string;
 }
 
+export interface ImplementationPlanFile {
+  path: string;
+  action: "create" | "update";
+  why: string;
+}
+
+export interface ImplementationPhase {
+  id: string;
+  title: string;
+  summary: string;
+  files: ImplementationPlanFile[];
+  verification: string[];
+}
+
+export interface ImplementationPlan {
+  goal: string;
+  summary: string;
+  architecture: string[];
+  phases: ImplementationPhase[];
+}
+
 export interface SubProblem {
   id: string;
   description: string;
   questions: string[];
   resolved: boolean;
   order: number;
+}
+
+export interface ValidationQuestion {
+  id: string;
+  prompt: string;
+  expectedKeywords: string[];
 }
 
 export type ResponseChunk =

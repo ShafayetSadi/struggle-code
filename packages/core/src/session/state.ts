@@ -1,6 +1,16 @@
 import { v4 as uuidv4 } from "uuid";
 
-import type { Intent, Mode, SessionState, TrailEntry, TrailEntryType } from "../types.js";
+import type {
+  ImplementationPlan,
+  Intent,
+  Mode,
+  SessionState,
+  TrailEntry,
+  TrailEntryType,
+  ValidationQuestion,
+} from "../types.js";
+
+export type ModePhase = "idle" | "planning" | "awaiting-approval" | "awaiting-validation" | "executing" | "verifying";
 
 export interface ModeHistoryEntry {
   mode: Mode;
@@ -61,6 +71,15 @@ export interface RuntimeSessionContext {
   socratic: SocraticRuntimeState | undefined;
 }
 
+export interface PendingModePlan {
+  mode: "guided" | "full-socratic";
+  request: string;
+  plan: ImplementationPlan;
+  validationQuestions: ValidationQuestion[];
+  attempts: number;
+  currentPhaseIndex: number;
+}
+
 export function now(): string {
   return new Date().toISOString();
 }
@@ -77,6 +96,7 @@ export function createInitialState(projectPath: string): SessionState {
     sharedFiles: [],
     createdAt,
     lastActive: createdAt,
+    modePhase: "idle",
   };
 }
 

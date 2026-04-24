@@ -1,0 +1,562 @@
+import { readFile, readdir } from "node:fs/promises";
+import { basename, extname, join, relative, resolve, sep } from "node:path";
+
+import type { LLMAdapter } from "../llm/adapter.js";
+import { safeComplete } from "../llm/runtime.js";
+import type { ImplementationPhase, ImplementationPlan, ValidationQuestion } from "../types.js";
+
+interface RepoEntry {
+  path: string;
+  kind: "file" | "directory";
+}
+
+interface BuildPlanOptions {
+  llm: LLMAdapter;
+  projectPath: string;
+  request: string;
+  sharedFiles: string[];
+}
+
+interface BuildValidationResult {
+  passed: boolean;
+  followUp?: string;
+}
+
+const IGNORED_DIRS = new Set([".git", "node_modules", "dist", "coverage", ".turbo"]);
+
+function normalizeWhitespace(value: string): string {
+  return value.replace(/\r/g, "").trim();
+}
+
+function normalizeSlug(value: string, index: number): string {
+  const slug = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug || `phase-${index + 1}`;
+}
+
+async function collectRepoEntries(
+  rootPath: string,
+  currentPath = rootPath,
+  maxDepth = 3,
+  currentDepth = 0
+): Promise<RepoEntry[]> {
+  const entries = await readdir(currentPath, { withFileTypes: true });
+  const results: RepoEntry[] = [];
+
+  for (const entry of entries) {
+    if (IGNORED_DIRS.has(entry.name)) {
+      continue;
+    }
+
+    const absolutePath = join(currentPath, entry.name);
+    const displayPath = relative(rootPath, absolutePath) || ".";
+    if (entry.isDirectory()) {
+      results.push({ path: `${displayPath}/`, kind: "directory" });
+      if (currentDepth < maxDepth) {
+        results.push(...(await collectRepoEntries(rootPath, absolutePath, maxDepth, currentDepth + 1)));
+      }
+      continue;
+    }
+
+    results.push({ path: displayPath, kind: "file" });
+  }
+
+  return results.sort((left, right) => left.path.localeCompare(right.path));
+}
+
+async function readProjectSample(
+  projectPath: string,
+  entries: RepoEntry[]
+): Promise<Array<{ path: string; snippet: string }>> {
+  const candidateFiles = entries
+    .filter((entry) => entry.kind === "file")
+    .map((entry) => entry.path)
+    .filter((path) => {
+      const extension = extname(path).toLowerCase();
+      return [".ts", ".tsx", ".js", ".jsx", ".json", ".md", ".yml", ".yaml"].includes(extension);
+    })
+    .slice(0, 8);
+
+  const samples: Array<{ path: string; snippet: string }> = [];
+  for (const path of candidateFiles) {
+    try {
+      const snippet = (await readFile(join(projectPath, path), "utf8")).slice(0, 600).trim();
+      if (snippet) {
+        samples.push({ path, snippet });
+      }
+    } catch {}
+  }
+  return samples;
+}
+
+function extractJsonObject(raw: string): string | undefined {
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced?.[1]) {
+    return fenced[1].trim();
+  }
+
+  const firstBrace = raw.indexOf("{");
+  const lastBrace = raw.lastIndexOf("}");
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+    return undefined;
+  }
+  return raw.slice(firstBrace, lastBrace + 1);
+}
+
+function isValidPlanFile(value: unknown): value is { path: string; action: "create" | "update"; why: string } {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const candidate = value as { path?: unknown; action?: unknown; why?: unknown };
+  return (
+    typeof candidate.path === "string" &&
+    (candidate.action === "create" || candidate.action === "update") &&
+    typeof candidate.why === "string"
+  );
+}
+
+function normalizePlan(rawPlan: unknown, fallback: ImplementationPlan): ImplementationPlan {
+  if (typeof rawPlan !== "object" || rawPlan === null) {
+    return fallback;
+  }
+
+  const candidate = rawPlan as {
+    goal?: unknown;
+    summary?: unknown;
+    architecture?: unknown;
+    phases?: unknown;
+  };
+
+  const phases = Array.isArray(candidate.phases)
+    ? candidate.phases
+        .map((phase, index): ImplementationPhase | undefined => {
+          if (typeof phase !== "object" || phase === null) {
+            return undefined;
+          }
+
+          const phaseCandidate = phase as {
+            title?: unknown;
+            summary?: unknown;
+            files?: unknown;
+            verification?: unknown;
+          };
+
+          if (typeof phaseCandidate.title !== "string" || typeof phaseCandidate.summary !== "string") {
+            return undefined;
+          }
+
+          const files = Array.isArray(phaseCandidate.files) ? phaseCandidate.files.filter(isValidPlanFile) : [];
+          const verification = Array.isArray(phaseCandidate.verification)
+            ? phaseCandidate.verification.filter((item): item is string => typeof item === "string")
+            : [];
+
+          return {
+            id: normalizeSlug(phaseCandidate.title, index),
+            title: phaseCandidate.title,
+            summary: phaseCandidate.summary,
+            files,
+            verification,
+          };
+        })
+        .filter((phase): phase is ImplementationPhase => Boolean(phase))
+    : [];
+
+  if (
+    typeof candidate.goal !== "string" ||
+    typeof candidate.summary !== "string" ||
+    !Array.isArray(candidate.architecture) ||
+    phases.length === 0
+  ) {
+    return fallback;
+  }
+
+  const architecture = candidate.architecture.filter((item): item is string => typeof item === "string");
+  if (architecture.length === 0) {
+    return fallback;
+  }
+
+  return {
+    goal: candidate.goal,
+    summary: candidate.summary,
+    architecture,
+    phases,
+  };
+}
+
+function findMatchingPath(paths: string[], patterns: RegExp[]): string | undefined {
+  return paths.find((path) => patterns.some((pattern) => pattern.test(path)));
+}
+
+function dedupeFiles(files: Array<{ path: string; action: "create" | "update"; why: string }>) {
+  const seen = new Set<string>();
+  return files.filter((file) => {
+    if (seen.has(file.path)) {
+      return false;
+    }
+    seen.add(file.path);
+    return true;
+  });
+}
+
+function buildFallbackPlan(
+  projectPath: string,
+  request: string,
+  entries: RepoEntry[],
+  sharedFiles: string[]
+): ImplementationPlan {
+  const lowerRequest = request.toLowerCase();
+  const filePaths = entries.filter((entry) => entry.kind === "file").map((entry) => entry.path);
+
+  const docsModesPath =
+    findMatchingPath(filePaths, [/^docs\/modes\.md$/]) ??
+    findMatchingPath(filePaths, [/modes\.md$/]) ??
+    "docs/modes.md";
+  const promptPath =
+    findMatchingPath(filePaths, [/coding-agent\/prompt\.ts$/]) ?? "packages/core/src/coding-agent/prompt.ts";
+  const sessionPath =
+    findMatchingPath(filePaths, [/coding-agent\/session\.ts$/]) ?? "packages/core/src/coding-agent/session.ts";
+  const statePath = findMatchingPath(filePaths, [/session\/state\.ts$/]) ?? "packages/core/src/session/state.ts";
+  const typesPath = findMatchingPath(filePaths, [/types\.ts$/]) ?? "packages/core/src/types.ts";
+  const testPath = findMatchingPath(filePaths, [/test\/session\.test\.ts$/]) ?? "packages/core/test/session.test.ts";
+  const readmePath = findMatchingPath(filePaths, [/packages\/core\/README\.md$/]) ?? "packages/core/README.md";
+
+  const relativeSharedFiles = sharedFiles
+    .map((path) => (isPathInsideProject(projectPath, path) ? relative(projectPath, resolve(path)) : path))
+    .filter((path) => Boolean(path) && !path.startsWith(".."));
+
+  const prioritizedFiles = dedupeFiles(
+    [docsModesPath, promptPath, sessionPath, statePath, typesPath, testPath, readmePath, ...relativeSharedFiles]
+      .filter(Boolean)
+      .map((path) => ({
+        path,
+        action: filePaths.includes(path) ? "update" : "create",
+        why:
+          path === docsModesPath
+            ? "The public mode contract needs to match the runtime behavior."
+            : path === promptPath
+              ? "Mode prompts should reflect the new semantics so the coding agent behaves correctly."
+              : path === sessionPath
+                ? "The live coding-agent session needs the orchestration logic for planning, gating, and execution."
+                : path === statePath
+                  ? "Session state has to expose the current mode phase and pending plan state."
+                  : path === typesPath
+                    ? "Shared plan and validation shapes should stay explicit and typed."
+                    : path === testPath
+                      ? "The session tests need to verify the new mode behavior."
+                      : "This file is relevant to the requested implementation.",
+      }))
+  );
+
+  const phases: ImplementationPhase[] = [
+    {
+      id: "shape-the-mode-contract",
+      title: "Shape the mode contract",
+      summary: `Define how ${lowerRequest.includes("mode") ? "the three modes" : "the requested behavior"} differs so standard stays direct, guided explains before coding, and full-socratic requires user validation before execution.`,
+      files: prioritizedFiles.slice(0, 3),
+      verification: [
+        "Check the docs and system prompt wording for consistent semantics.",
+        "Make sure standard mode remains the direct execution path.",
+      ],
+    },
+    {
+      id: "wire-the-live-runtime",
+      title: "Wire the live runtime",
+      summary:
+        "Introduce a planning layer in front of the active coding agent, then persist enough state to continue guided and full-socratic flows across turns.",
+      files: prioritizedFiles.slice(2, 6),
+      verification: [
+        "Confirm guided mode emits a project explanation before agent execution begins.",
+        "Confirm full-socratic mode blocks agent execution until the user demonstrates understanding.",
+      ],
+    },
+    {
+      id: "prove-the-behavior",
+      title: "Prove the behavior",
+      summary:
+        "Update tests and package docs so the shipped contract matches the actual runtime, not the old prompt-only distinction.",
+      files: prioritizedFiles.slice(4),
+      verification: [
+        "Run the core test suite for the updated session behavior.",
+        "Review the README and modes doc so teammates can understand the new contract.",
+      ],
+    },
+  ];
+
+  return {
+    goal: request.trim(),
+    summary:
+      "Implement distinct mode behavior on top of the live coding-agent runtime so each mode changes the user experience, not just the wording of the prompt.",
+    architecture: [
+      "Keep `standard` as the direct coding-agent path with minimal extra ceremony.",
+      "Add a plan-building layer that inspects the repo and explains the implementation shape before any coding in `guided` and `full-socratic`.",
+      "Persist pending plan and validation state across turns so full-socratic can block execution until the user passes the understanding check.",
+    ],
+    phases,
+  };
+}
+
+export async function buildImplementationPlan({
+  llm,
+  projectPath,
+  request,
+  sharedFiles,
+}: BuildPlanOptions): Promise<ImplementationPlan> {
+  const entries = await collectRepoEntries(projectPath).catch(() => [] as RepoEntry[]);
+  const samples = await readProjectSample(projectPath, entries).catch(
+    () => [] as Array<{ path: string; snippet: string }>
+  );
+  const fallback = buildFallbackPlan(projectPath, request, entries, sharedFiles);
+
+  const snapshot = [
+    `Project root: ${projectPath}`,
+    `Shared files: ${sharedFiles.length > 0 ? sharedFiles.join(", ") : "(none)"}`,
+    "Repo entries:",
+    ...entries.slice(0, 120).map((entry) => `- ${entry.path}`),
+    "",
+    "Sample file snippets:",
+    ...samples.flatMap((sample) => [`FILE ${sample.path}`, sample.snippet, ""]),
+  ].join("\n");
+
+  const raw = await safeComplete(
+    llm,
+    [
+      {
+        role: "system",
+        content: [
+          "Return only JSON.",
+          "You are planning a coding-agent implementation for a local repository.",
+          "Build a concrete implementation plan that explains architecture, files to change, and verification.",
+          "Use this JSON schema:",
+          '{"goal":"string","summary":"string","architecture":["string"],"phases":[{"title":"string","summary":"string","files":[{"path":"string","action":"create|update","why":"string"}],"verification":["string"]}]}',
+        ].join(" "),
+      },
+      {
+        role: "user",
+        content: JSON.stringify({
+          request,
+          projectSnapshot: snapshot,
+          fallbackPlan: fallback,
+        }),
+      },
+    ],
+    JSON.stringify(fallback)
+  );
+
+  const json = extractJsonObject(raw);
+  if (!json) {
+    return fallback;
+  }
+
+  try {
+    return normalizePlan(JSON.parse(json), fallback);
+  } catch {
+    return fallback;
+  }
+}
+
+function fallbackQuestionKeywords(phase: ImplementationPhase): string[] {
+  const titleWords = phase.title
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word.length >= 4);
+  const fileWords = phase.files.flatMap((file) =>
+    basename(file.path)
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((word) => word.length >= 3)
+  );
+  return Array.from(new Set([...titleWords, ...fileWords])).slice(0, 4);
+}
+
+export function buildValidationQuestions(plan: ImplementationPlan): ValidationQuestion[] {
+  return plan.phases.slice(0, 3).map((phase, index) => ({
+    id: `validation-${index + 1}`,
+    prompt:
+      index === 0
+        ? `Before we code, explain how "${phase.title}" changes the project and which file or module carries that work.`
+        : index === 1
+          ? `Why does "${phase.title}" need the files it touches, and what responsibility does each one own?`
+          : `What would you verify after "${phase.title}" to prove the implementation still works?`,
+    expectedKeywords: fallbackQuestionKeywords(phase),
+  }));
+}
+
+export function formatPlanForUser(plan: ImplementationPlan, mode: "guided" | "full-socratic"): string {
+  const lines = [
+    `${mode === "guided" ? "Guided mode" : "Full-socratic mode"} is mapping the work before any coding starts.`,
+    "",
+    `Goal: ${plan.goal}`,
+    `Summary: ${plan.summary}`,
+    "",
+    "Architecture notes:",
+    ...plan.architecture.map((item) => `- ${item}`),
+    "",
+    "Implementation phases:",
+    ...plan.phases.flatMap((phase, index) => [
+      `${index + 1}. ${phase.title}: ${phase.summary}`,
+      ...phase.files.map((file) => `   - ${file.action.toUpperCase()} ${file.path}: ${file.why}`),
+      ...phase.verification.map((item) => `   - Verify: ${item}`),
+    ]),
+  ];
+  return `${lines.join("\n")}\n`;
+}
+
+export function formatPhaseForUser(
+  plan: ImplementationPlan,
+  phaseIndex: number,
+  mode: "guided" | "full-socratic"
+): string {
+  const phase = plan.phases[phaseIndex];
+  if (!phase) {
+    return `${mode === "guided" ? "Guided mode" : "Full-socratic mode"} has no remaining phases to explain.\n`;
+  }
+
+  const lines = [
+    `${mode === "guided" ? "Guided mode" : "Full-socratic mode"} is ready for phase ${phaseIndex + 1} of ${plan.phases.length}.`,
+    "",
+    `Phase: ${phase.title}`,
+    `Why this phase exists: ${phase.summary}`,
+    "",
+    "Files and responsibilities:",
+    ...phase.files.map((file) => `- ${file.action.toUpperCase()} ${file.path}: ${file.why}`),
+    "",
+    "Verification for this phase:",
+    ...phase.verification.map((item) => `- ${item}`),
+  ];
+
+  return `${lines.join("\n")}\n`;
+}
+
+export function formatGuidedApprovalPrompt(plan: ImplementationPlan, phaseIndex: number): string {
+  const phase = plan.phases[phaseIndex];
+  return [
+    `Do you understand phase ${phaseIndex + 1}${phase ? `, "${phase.title},"` : ""} and should I execute it now?`,
+    'Reply with something like "yes", "ok", "go ahead", or ask a question about the phase first.',
+  ].join("\n");
+}
+
+export function looksLikeApproval(message: string): boolean {
+  return /^(yes|yep|yeah|ok|okay|go|go ahead|continue|next|proceed|do it|ship it|sounds good)\b/i.test(message.trim());
+}
+
+export function buildPhaseExecutionPrompt(
+  request: string,
+  plan: ImplementationPlan,
+  phaseIndex: number,
+  mode: "guided" | "full-socratic"
+): string {
+  const phase = plan.phases[phaseIndex];
+  return [
+    request,
+    "",
+    `Execution context: this request is running in ${mode} mode.`,
+    `Execute only phase ${phaseIndex + 1} of ${plan.phases.length}: ${phase?.title ?? "Current phase"}.`,
+    "Do not execute later phases yet.",
+    "When this phase is done, summarize exactly what changed and what remains for the next phase.",
+    "",
+    JSON.stringify(
+      {
+        goal: plan.goal,
+        summary: plan.summary,
+        architecture: plan.architecture,
+        currentPhase: phase,
+        phaseIndex,
+        totalPhases: plan.phases.length,
+      },
+      null,
+      2
+    ),
+  ].join("\n");
+}
+
+export function formatValidationPrompt(questions: ValidationQuestion[]): string {
+  const lines = [
+    "Before I execute the plan, answer these in your own words so I know the project shape is clear:",
+    ...questions.map((question, index) => `${index + 1}. ${question.prompt}`),
+  ];
+  return `${lines.join("\n")}\n`;
+}
+
+export async function evaluateValidationAnswer(
+  llm: LLMAdapter,
+  plan: ImplementationPlan,
+  questions: ValidationQuestion[],
+  answer: string
+): Promise<BuildValidationResult> {
+  const keywordHits = questions.filter((question) =>
+    question.expectedKeywords.some((keyword) => answer.toLowerCase().includes(keyword.toLowerCase()))
+  ).length;
+  const heuristicPassed = keywordHits >= Math.max(1, Math.ceil(questions.length * 0.6));
+
+  const fallback = heuristicPassed
+    ? '{"passed":true}'
+    : JSON.stringify({
+        passed: false,
+        followUp: `Tighten the explanation around ${plan.phases[0]?.title ?? "the first phase"} and name the file boundary you would touch first.`,
+      });
+
+  const raw = await safeComplete(
+    llm,
+    [
+      {
+        role: "system",
+        content: [
+          "Return only JSON.",
+          'Use the schema {"passed":boolean,"followUp":"string"}',
+          "Pass only when the answer clearly explains the implementation shape, file ownership, and validation path.",
+        ].join(" "),
+      },
+      {
+        role: "user",
+        content: JSON.stringify({
+          plan,
+          questions,
+          answer,
+        }),
+      },
+    ],
+    fallback
+  );
+
+  const json = extractJsonObject(raw);
+  if (!json) {
+    return JSON.parse(fallback) as BuildValidationResult;
+  }
+
+  try {
+    const parsed = JSON.parse(json) as { passed?: unknown; followUp?: unknown };
+    return {
+      passed: parsed.passed === true,
+      ...(typeof parsed.followUp === "string" ? { followUp: normalizeWhitespace(parsed.followUp) } : {}),
+    };
+  } catch {
+    return JSON.parse(fallback) as BuildValidationResult;
+  }
+}
+
+export function buildExecutionPrompt(
+  request: string,
+  plan: ImplementationPlan,
+  mode: "guided" | "full-socratic"
+): string {
+  return [
+    request,
+    "",
+    `Execution context: this request is running in ${mode} mode.`,
+    "Follow the approved implementation plan below.",
+    "Keep the implementation consistent with this plan unless repo reality forces a better boundary, in which case explain the adjustment briefly.",
+    "",
+    JSON.stringify(plan, null, 2),
+  ].join("\n");
+}
+
+export function isPathInsideProject(projectPath: string, candidatePath: string): boolean {
+  const normalizedProjectPath = resolve(projectPath);
+  const normalizedCandidatePath = resolve(candidatePath);
+  return (
+    normalizedCandidatePath === normalizedProjectPath ||
+    normalizedCandidatePath.startsWith(`${normalizedProjectPath}${sep}`)
+  );
+}
