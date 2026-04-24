@@ -18,7 +18,7 @@ Already shipped locally:
 - REPL renders text, code, question, ADR, checkpoint, and sub-problem chunks
 - guided interview progress line now shows `Question N of 5`
 - CLI README exists at `packages/cli/README.md`
-- prompt files now exist for classifier, quick help, debug, guided, standard, full socratic, stuck flow, and hints
+- prompt files now exist for classifier, quick help, debug, guided, standard, socratic, stuck flow, and hints
 - shared manual QA lives in `docs/manual-testing.md`
 
 Recent integration notes:

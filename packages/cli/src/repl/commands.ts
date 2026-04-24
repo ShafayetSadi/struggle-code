@@ -9,8 +9,9 @@ import type { ReplState, SlashCommand } from "./types.js";
 export const HELP_TEXT = `
 Available commands:
   /help                     Show this help
-  /mode <guided|standard|full-socratic>
+  /mode <guided|standard|socratic>
                             Switch learning mode
+  /model [model-id]         Show models or switch the current model
   /share <path>             Share a file with the active session
   /stuck                    Trigger a stuck-session intervention
   /hint [1|2|3]             Ask for a hint; defaults to the next level
@@ -40,10 +41,12 @@ export function parseSlashCommand(input: string): SlashCommand | undefined {
     case "quit":
       return { kind: "exit" };
     case "mode":
-      if (args[0] === "guided" || args[0] === "standard" || args[0] === "full-socratic") {
+      if (args[0] === "guided" || args[0] === "standard" || args[0] === "socratic") {
         return { kind: "mode", mode: args[0] };
       }
       return { kind: "help" };
+    case "model":
+      return args.length > 0 ? { kind: "model", model: args.join(" ") } : { kind: "model" };
     case "share":
       if (args.length === 0) return { kind: "help" };
       return { kind: "share", path: args.join(" ") };
@@ -56,8 +59,7 @@ export function parseSlashCommand(input: string): SlashCommand | undefined {
     case "trail": {
       if (args[0] !== "export") return { kind: "help" };
       const path = args.find((v) => !v.startsWith("--") && v !== "export");
-      const format =
-        args.includes("--format") && args[args.indexOf("--format") + 1] === "pdf" ? "pdf" : "md";
+      const format = args.includes("--format") && args[args.indexOf("--format") + 1] === "pdf" ? "pdf" : "md";
       return path ? { kind: "trail-export", path, format } : { kind: "trail-export", format };
     }
     default:
@@ -81,10 +83,7 @@ function defaultTrailPath(projectPath: string, session: Session, format: "md" | 
   return join(projectPath, ".struggle-ai", `trail-${session.state.id}.${suffix}`);
 }
 
-export async function streamChunks<T>(
-  iterable: AsyncIterable<T>,
-  onChunk: (chunk: T) => void
-): Promise<void> {
+export async function streamChunks<T>(iterable: AsyncIterable<T>, onChunk: (chunk: T) => void): Promise<void> {
   for await (const chunk of iterable) {
     onChunk(chunk);
   }
@@ -95,6 +94,7 @@ export async function handleSlashCommand(
   session: Session,
   projectPath: string,
   replState: ReplState,
+  handleModelCommand: (model?: string) => Promise<string[]>,
   writeLine: (value: string) => void,
   writeLines: (values: string[]) => void
 ): Promise<"continue" | "exit"> {
@@ -108,6 +108,9 @@ export async function handleSlashCommand(
       session.setMode(command.mode);
       syncHintState(session, replState);
       writeLine(chalk.hex(P.blue)(`mode set to ${command.mode}`));
+      return "continue";
+    case "model":
+      writeLines(await handleModelCommand(command.model));
       return "continue";
     case "share": {
       const resolved = resolve(projectPath, command.path);

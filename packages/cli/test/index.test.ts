@@ -9,7 +9,13 @@ describe("cli entry", () => {
   });
 
   it("parses the supported slash commands", () => {
+    expect(parseSlashCommand("/mode socratic")).toEqual({ kind: "mode", mode: "socratic" });
     expect(parseSlashCommand("/mode standard")).toEqual({ kind: "mode", mode: "standard" });
+    expect(parseSlashCommand("/model")).toEqual({ kind: "model" });
+    expect(parseSlashCommand("/model gemini-3-flash")).toEqual({
+      kind: "model",
+      model: "gemini-3-flash",
+    });
     expect(parseSlashCommand("/share src/index.ts")).toEqual({ kind: "share", path: "src/index.ts" });
     expect(parseSlashCommand("/hint 2")).toEqual({ kind: "hint", level: 2 });
     expect(parseSlashCommand("/trail export notes/trail.md --format pdf")).toEqual({

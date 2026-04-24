@@ -30,16 +30,25 @@ npm run test --workspace packages/core
 npm run test --workspace packages/cli
 ```
 
-Set one real provider key before running the CLI:
+Set one real provider before running the CLI:
 
 ```bash
 export ANTHROPIC_API_KEY=your_real_key_here
+```
+
+Or use an account-backed provider:
+
+```bash
+npm exec --workspace packages/cli struggle -- config login openai-codex
+npm exec --workspace packages/cli struggle -- config set-provider openai-codex
 ```
 
 Optional config setup:
 
 ```bash
 npm exec --workspace packages/cli struggle -- config set-provider anthropic
+npm exec --workspace packages/cli struggle -- config list-models anthropic
+npm exec --workspace packages/cli struggle -- config set-model claude-sonnet-4-5
 npm exec --workspace packages/cli struggle -- config show
 ```
 
@@ -54,6 +63,8 @@ Start the local CLI:
 ```bash
 npm exec --workspace packages/cli struggle -- --project /tmp/struggle-fastapi-demo
 ```
+
+If you do not already have a usable provider configured, the CLI should prompt for provider selection and login before the REPL opens.
 
 ## Test Flow A: Guided Happy Path
 
@@ -116,7 +127,7 @@ Start a fresh CLI session or continue in the current one:
 /mode standard
 Build auth
 A user should be able to sign in and reach a protected dashboard.
-/mode full-socratic
+/mode socratic
 Help me build JWT auth
 ```
 
@@ -124,8 +135,8 @@ Help me build JWT auth
 
 - `/mode standard` updates the prompt mode label
 - standard mode asks one clarification question, then generates code/checkpoint output
-- `/mode full-socratic` updates the prompt mode label
-- full socratic emits at least one `sub-problem` style response
+- `/mode socratic` updates the prompt mode label
+- socratic emits at least one `sub-problem` style response
 
 ## Test Flow D: Trail Export Check
 

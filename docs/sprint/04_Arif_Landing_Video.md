@@ -50,7 +50,7 @@ Spend the first 30 minutes after kickoff reading:
 - Close with the stance: *"Socrates AI is the opposite bet. Scaled friction. Comprehension-first. Real artifacts."*
 
 **3. How It Works (three beats, visual)**
-- **Beat 1 — Three Friction Modes.** Full Socratic (high friction, deep learning), Guided (balanced, default), Standard (low friction, but always with a digest step). Visual: three cards side by side, with distinct colors and short descriptions.
+- **Beat 1 — Three Friction Modes.** Socratic (high friction, deep learning), Guided (balanced, default), Standard (low friction, but always with a digest step). Visual: three cards side by side, with distinct colors and short descriptions.
 - **Beat 2 — The Socratic Gate.** The AI refuses to generate until you articulate trade-offs. Visual: a conversation snippet showing "Before we write code — what are 3 things that can go wrong with JWT auth?" → user answers → code unlocks.
 - **Beat 3 — Real Artifacts.** Every milestone produces an ADR + "Concepts You Should Know" + "What Could Break" + verified doc links. Visual: a rendered ADR preview (use a real one from Sadi's sample at H22).
 

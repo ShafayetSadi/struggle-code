@@ -1,20 +1,35 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import { type Interface, createInterface } from "node:readline/promises";
 
-import { type IO, type ProviderConfig, startSession } from "@struggle-ai/core";
+import { getModels } from "@mariozechner/pi-ai";
+import { DEFAULT_CONFIGS, type IO, type ProviderConfig, startSession } from "@struggle-ai/core";
 
+import { cliIO } from "./ioImpl.js";
+import { Key, ProcessTerminal, TUI } from "./pi-tui/src/index.js";
 import { CommandMenu } from "./repl/commandMenu.js";
 import { HELP_TEXT, handleSlashCommand, parseSlashCommand, streamChunks, syncHintState } from "./repl/commands.js";
-import { formatChunk, formatPrompt, P, chalk } from "./repl/formatting.js";
+import { P, chalk, formatChunk, formatPrompt } from "./repl/formatting.js";
 import { createTuiIO } from "./repl/io.js";
-import { Key, ProcessTerminal, TUI } from "./pi-tui/src/index.js";
+import { ModelMenu } from "./repl/modelMenu.js";
 import { ReplScreen } from "./repl/screen.js";
 import type { ReplState } from "./repl/types.js";
-import { cliIO } from "./ioImpl.js";
+
+const CONFIG_DIR = join(homedir(), ".struggle-ai");
+const CONFIG_PATH = join(CONFIG_DIR, "config.json");
+
+async function writeConfigFile(path: string, config: ProviderConfig): Promise<void> {
+  const { onAuthRefresh: _ignored, ...serializable } = config;
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, `${JSON.stringify(serializable, null, 2)}\n`, "utf8");
+}
 
 async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> {
   const projectPath = options.projectPath ?? process.cwd();
   const io = options.io ?? cliIO;
-  const session = await startSession(projectPath, io, options.config);
+  let currentConfig = options.config ?? DEFAULT_CONFIGS.anthropic;
+  const session = await startSession(projectPath, io, currentConfig);
   const replState: ReplState = {
     hintLevel: 1,
     lastMilestone: session.state.activeMilestone,
@@ -42,11 +57,31 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
       try {
         const command = parseSlashCommand(trimmed);
         if (command) {
+          const handleModelCommand = async (model?: string): Promise<string[]> => {
+            const available = getModels(currentConfig.provider);
+            if (!model) {
+              return available.map((entry) => `${entry.id === currentConfig.model ? "*" : " "} ${entry.id}`);
+            }
+
+            if (!available.some((entry) => entry.id === model)) {
+              return [`Unknown model for ${currentConfig.provider}: ${model}`];
+            }
+
+            currentConfig = {
+              ...currentConfig,
+              model,
+              apiKeyEnv: DEFAULT_CONFIGS[currentConfig.provider].apiKeyEnv,
+            };
+            session.setProviderConfig(currentConfig);
+            await writeConfigFile(CONFIG_PATH, currentConfig);
+            return [`model set to ${currentConfig.provider}/${currentConfig.model}`];
+          };
           const status = await handleSlashCommand(
             command,
             session,
             projectPath,
             replState,
+            handleModelCommand,
             (line) => process.stdout.write(`${line}\n`),
             (values) => {
               for (const v of values) process.stdout.write(`${v}\n`);
@@ -94,6 +129,7 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
 
   const projectPath = options.projectPath ?? process.cwd();
   const baseIO = options.io ?? cliIO;
+  let currentConfig = options.config ?? DEFAULT_CONFIGS.anthropic;
   const pending: string[] = [];
   const writeLine = (value: string) => {
     pending.push(value);
@@ -103,7 +139,7 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
   };
 
   const io = createTuiIO(baseIO, writeLine);
-  const session = await startSession(projectPath, io, options.config);
+  const session = await startSession(projectPath, io, currentConfig);
   const replState: ReplState = {
     hintLevel: 1,
     lastMilestone: session.state.activeMilestone,
@@ -112,13 +148,14 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
   const terminal = new ProcessTerminal();
   const tui = new TUI(terminal);
   let commandMenuOpen = false;
+  let modelMenuOpen = false;
 
   let resolveExit: (() => void) | undefined;
   const exited = new Promise<void>((resolve) => {
     resolveExit = resolve;
   });
 
-  const modelLabel = options.config ? `${options.config.provider}/${options.config.model}` : "default model";
+  const modelLabel = `${currentConfig.provider}/${currentConfig.model}`;
 
   const screen = new ReplScreen(session.state.mode, projectPath, modelLabel, (value) => {
     void submitValue(value);
@@ -147,6 +184,10 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
           tui.setFocus(screen);
 
           const selfExecuting = new Set(["/exit", "/stuck", "/hint", "/hint 2", "/hint 3", "/trail export"]);
+          if (item.value === "/model") {
+            openModelMenu();
+            return;
+          }
           if (selfExecuting.has(item.value) || item.value.startsWith("/mode ")) {
             void submitValue(item.value);
             return;
@@ -170,9 +211,46 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
     );
   };
 
+  const openModelMenu = () => {
+    if (modelMenuOpen) return;
+    modelMenuOpen = true;
+
+    const items = getModels(currentConfig.provider).map((model) => ({
+      value: model.id,
+      label: model.id,
+      ...(model.id === currentConfig.model ? { description: "current" } : {}),
+    }));
+
+    const overlay = tui.showOverlay(
+      new ModelMenu(
+        items,
+        currentConfig.model,
+        (item) => {
+          overlay.hide();
+          modelMenuOpen = false;
+          tui.setFocus(screen);
+          void submitValue(`/model ${item.value}`);
+        },
+        () => {
+          overlay.hide();
+          modelMenuOpen = false;
+          tui.setFocus(screen);
+          tui.requestRender();
+        }
+      ),
+      {
+        width: "100%",
+        minWidth: 50,
+        maxHeight: 16,
+        anchor: "bottom-center",
+      }
+    );
+  };
+
   const refreshSessionState = () => {
     screen.setMode(session.state.mode);
     screen.setActiveSubProblem(session.state.activeSubProblem);
+    screen.setModelLabel(`${currentConfig.provider}/${currentConfig.model}`);
     screen.invalidate();
     tui.requestRender();
   };
@@ -197,11 +275,39 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
     try {
       const command = parseSlashCommand(trimmed);
       if (command) {
+        const handleModelCommand = async (model?: string): Promise<string[]> => {
+          const available = getModels(currentConfig.provider);
+          if (!model) {
+            openModelMenu();
+            return [];
+          }
+
+          if (!available.some((entry) => entry.id === model)) {
+            return [`Unknown model for ${currentConfig.provider}: ${model}`];
+          }
+
+          currentConfig = {
+            ...currentConfig,
+            model,
+            apiKeyEnv: DEFAULT_CONFIGS[currentConfig.provider].apiKeyEnv,
+          };
+          session.setProviderConfig(currentConfig);
+          await writeConfigFile(CONFIG_PATH, currentConfig);
+          return [`model set to ${currentConfig.provider}/${currentConfig.model}`];
+        };
         if (command.kind === "help") {
           openCommandMenu();
           return;
         }
-        const status = await handleSlashCommand(command, session, projectPath, replState, writeLine, writeLines);
+        const status = await handleSlashCommand(
+          command,
+          session,
+          projectPath,
+          replState,
+          handleModelCommand,
+          writeLine,
+          writeLines
+        );
         flushPending();
         refreshSessionState();
         if (status === "exit") {

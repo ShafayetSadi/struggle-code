@@ -72,7 +72,7 @@ export interface RuntimeSessionContext {
 }
 
 export interface PendingModePlan {
-  mode: "guided" | "full-socratic";
+  mode: "guided" | "socratic";
   intent: Intent;
   request: string;
   plan: ImplementationPlan;
@@ -144,7 +144,7 @@ export function deriveDisplayState(state: SessionState, runtime: RuntimeSessionC
 
   if (runtime.socratic) {
     const active = runtime.socratic.subProblems[runtime.socratic.activeSubProblemIndex];
-    state.activeMilestone = "Full Socratic decomposition";
+    state.activeMilestone = "Socratic decomposition";
     state.activeSubProblem = active?.description ?? "Break the problem into smaller pieces";
     return;
   }

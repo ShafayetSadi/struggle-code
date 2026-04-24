@@ -8,6 +8,7 @@ import {
 } from "@mariozechner/pi-ai";
 
 import type { ProviderConfig } from "../types.js";
+import { resolveProviderApiKey } from "./auth.js";
 
 export interface LLMMessage {
   role: "system" | "user" | "assistant";
@@ -21,14 +22,6 @@ export interface CompletionOptions {
 export interface LLMAdapter {
   complete(messages: LLMMessage[], options?: CompletionOptions): Promise<string>;
   stream(messages: LLMMessage[], options?: CompletionOptions): AsyncIterable<string>;
-}
-
-function withProviderApiKey<T>(config: ProviderConfig, run: (apiKey: string) => Promise<T>): Promise<T> {
-  const apiKey = process.env[config.apiKeyEnv];
-  if (!apiKey) {
-    throw new Error(`Missing API key: set ${config.apiKeyEnv} in your environment`);
-  }
-  return run(apiKey);
 }
 
 function normalizePlainTextOutput(text: string): string {
@@ -106,7 +99,7 @@ export function createLLMAdapter(config: ProviderConfig): LLMAdapter {
 
   return {
     async complete(messages, options) {
-      return withProviderApiKey(config, async (apiKey) => {
+      return resolveProviderApiKey(config).then(async (apiKey) => {
         const response = await completeSimple(model, toContext(messages), {
           apiKey,
           ...(options?.reasoning ? { reasoning: options.reasoning } : {}),
@@ -115,12 +108,11 @@ export function createLLMAdapter(config: ProviderConfig): LLMAdapter {
       });
     },
     async *stream(messages, options) {
-      const events = await withProviderApiKey(config, async (apiKey) =>
-        streamSimple(model, toContext(messages), {
-          apiKey,
-          ...(options?.reasoning ? { reasoning: options.reasoning } : {}),
-        })
-      );
+      const apiKey = await resolveProviderApiKey(config);
+      const events = await streamSimple(model, toContext(messages), {
+        apiKey,
+        ...(options?.reasoning ? { reasoning: options.reasoning } : {}),
+      });
 
       for await (const event of events) {
         if (event.type === "text_delta") {

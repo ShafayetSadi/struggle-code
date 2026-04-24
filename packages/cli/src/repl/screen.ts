@@ -3,9 +3,27 @@ import * as process from "node:process";
 
 import type { Mode } from "@struggle-ai/core";
 
-import { CURSOR_MARKER, Input, Key, padToWidth, truncateToWidth, visibleWidth, type SelectItem } from "../pi-tui/src/index.js";
+import {
+  CURSOR_MARKER,
+  Input,
+  Key,
+  type SelectItem,
+  padToWidth,
+  truncateToWidth,
+  visibleWidth,
+} from "../pi-tui/src/index.js";
 import { commandMatches } from "./commandMenu.js";
-import { BUBBLE_THEMES, P, chalk, formatChunk, modePill, renderBubble, renderThinkingFrame, streamingCursor, wrapAt } from "./formatting.js";
+import {
+  BUBBLE_THEMES,
+  P,
+  chalk,
+  formatChunk,
+  modePill,
+  renderBubble,
+  renderThinkingFrame,
+  streamingCursor,
+  wrapAt,
+} from "./formatting.js";
 import type { LogEntry, LogKind } from "./types.js";
 
 export class ReplScreen {
@@ -14,7 +32,7 @@ export class ReplScreen {
   private readonly input = new Input();
   private mode: Mode;
   private readonly projectLabel: string;
-  private readonly modelLabel: string;
+  private modelLabel: string;
   private activeSubProblem: string | undefined;
   private busy = false;
   private commandSelection = 0;
@@ -54,6 +72,10 @@ export class ReplScreen {
 
   setMode(mode: Mode): void {
     this.mode = mode;
+  }
+
+  setModelLabel(value: string): void {
+    this.modelLabel = value;
   }
 
   setActiveSubProblem(value: string | undefined): void {
@@ -234,10 +256,10 @@ export class ReplScreen {
       thinkingHeight +
       busyHeight +
       hintHeight +
-      1 +           // input separator (─)
+      1 + // input separator (─)
       inputHeight +
-      1 +           // footer separator (─)
-      1;            // info bar
+      1 + // footer separator (─)
+      1; // info bar
 
     // Header = 3 lines. Transcript fills everything in between.
     const transcriptViewport = Math.max(4, termHeight - 3 - belowTranscript);
@@ -290,19 +312,13 @@ export class ReplScreen {
         ? Math.max(1, Math.floor((transcriptViewport / totalLines) * transcriptViewport))
         : transcriptViewport;
       const scrollableRange = transcriptViewport - thumbSize;
-      const scrollRatio = this.maxTranscriptScroll > 0
-        ? this.transcriptScroll / this.maxTranscriptScroll
-        : 0;
-      const thumbOffset = needsScrollbar
-        ? Math.round((1 - scrollRatio) * scrollableRange)
-        : 0;
+      const scrollRatio = this.maxTranscriptScroll > 0 ? this.transcriptScroll / this.maxTranscriptScroll : 0;
+      const thumbOffset = needsScrollbar ? Math.round((1 - scrollRatio) * scrollableRange) : 0;
 
       // Pad viewport to exact height so blank lines also get a scrollbar glyph
       for (let i = 0; i < transcriptViewport; i++) {
         const isThumb = needsScrollbar && i >= thumbOffset && i < thumbOffset + thumbSize;
-        const bar = isThumb
-          ? chalk.hex(P.textMuted)("▐")
-          : chalk.hex(P.borderSubtle)("╎");
+        const bar = isThumb ? chalk.hex(P.textMuted)("▐") : chalk.hex(P.borderSubtle)("╎");
         const trimmed = truncateToWidth(visibleSlice[i] ?? "", w - 1);
         lines.push(chalk.bgHex(P.bg)(padToWidth(trimmed, w - 1)) + chalk.bgHex(P.bg)(bar));
       }
@@ -349,10 +365,7 @@ export class ReplScreen {
 
     const leftInfo = chalk.hex(P.textMuted)(`  ~/${this.projectLabel}`);
     const rightInfo = chalk.hex(P.textMuted)(`  ${this.modelLabel}`);
-    const bottomPad = padToWidth(
-      truncateToWidth(leftInfo, w - visibleWidth(rightInfo)),
-      w - visibleWidth(rightInfo)
-    );
+    const bottomPad = padToWidth(truncateToWidth(leftInfo, w - visibleWidth(rightInfo)), w - visibleWidth(rightInfo));
     lines.push(chalk.bgHex("#161b22")(bottomPad + rightInfo));
 
     return lines;

@@ -5,15 +5,18 @@ Core runtime for Struggle AI. It now wraps `@mariozechner/pi-agent-core` and exp
 ## Requirements
 
 - Node.js 20+
-- An LLM API key for one supported provider
+- An LLM API key or account login for one supported provider
 
 Supported providers:
 
 - Anthropic via `ANTHROPIC_API_KEY`
 - Google via `GOOGLE_API_KEY` or `GEMINI_API_KEY`
 - OpenAI via `OPENAI_API_KEY`
+- OpenRouter via `OPENROUTER_API_KEY`
+- OpenAI Codex via stored OAuth credentials from `struggle config login openai-codex`
+- Antigravity via stored OAuth credentials from `struggle config login google-antigravity`
 
-Provider resolution defaults to the first available key in that order unless you pass an explicit config to `startSession()`.
+Provider resolution defaults to the first available API key in that order unless you pass an explicit config to `startSession()`.
 
 ## Install
 
@@ -99,7 +102,7 @@ console.log(chunks);
 
 - `state`: current session state
 - `sendMessage(message)`: async stream of `ResponseChunk`
-- `setMode(mode)`: switch between `guided`, `standard`, and `full-socratic`
+- `setMode(mode)`: switch between `guided`, `standard`, and `socratic`
 - `shareFile(path)`: prioritize a file in future prompts
 - `invokeStuck()`: emit a stuck-session intervention
 - `invokeHint(level)`: emit a coding hint at level `1`, `2`, or `3`
@@ -113,7 +116,7 @@ Modes now change the live runtime behavior:
 
 - `guided`: inspect the repo, explain the implementation phases and file ownership, then execute
 - `standard`: behave like a normal coding agent with minimal ceremony
-- `full-socratic`: explain one phase at a time, quiz the user on that phase, require approval, then execute only that phase before repeating the loop
+- `socratic`: explain one phase at a time, quiz the user on that phase, require approval, then execute only that phase before repeating the loop
 
 ## Agent Tools
 
@@ -132,8 +135,8 @@ All file tools are restricted to the session project root. `run_command` also ex
 `sendMessage()` yields structured chunks. In the current coding-agent runtime, most output is emitted as `text` chunks:
 
 - tool activity summaries such as `[tool] read_file src/index.ts`
-- guided or full-socratic plan explanations before coding begins
-- full-socratic validation prompts before execution
+- guided or socratic plan explanations before coding begins
+- socratic validation prompts before execution
 - assistant responses after tool use
 - hint and stuck-session messages
 
@@ -151,7 +154,7 @@ Exported trails include:
 
 ## Prompt Assets
 
-Prompt files in [`src/prompts`](./src/prompts) are still used by helper modules such as `classifyIntent()` and `createLLMAdapter()`-based flows. The coding-agent session runtime itself uses a generated system prompt plus internal planning and validation prompts for guided and full-socratic mode.
+Prompt files in [`src/prompts`](./src/prompts) are still used by helper modules such as `classifyIntent()` and `createLLMAdapter()`-based flows. The coding-agent session runtime itself uses a generated system prompt plus internal planning and validation prompts for guided and socratic mode.
 
 ## Notes for Consumers
 

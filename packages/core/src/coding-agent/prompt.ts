@@ -12,7 +12,7 @@ function describeMode(mode: Mode): string {
     ].join(" ");
   }
 
-  if (mode === "full-socratic") {
+  if (mode === "socratic") {
     return [
       "Before any coding, inspect the repo and explain the implementation in phases.",
       "Require the user to explain the architecture, file ownership, and verification path back to you before execution.",

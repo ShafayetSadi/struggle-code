@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const completeSimple = vi.fn();
 const streamSimple = vi.fn();
 const getModel = vi.fn(() => ({ api: "responses" }));
+const getOAuthApiKey = vi.fn();
 
 vi.mock("@mariozechner/pi-ai", () => ({
   completeSimple,
   streamSimple,
   getModel,
+  getOAuthApiKey,
 }));
 
 describe("createLLMAdapter", () => {
@@ -69,5 +71,88 @@ describe("createLLMAdapter", () => {
     await expect(adapter.complete([{ role: "user", content: "hi" }])).rejects.toThrow(
       "Missing API key: set ANTHROPIC_API_KEY in your environment"
     );
+  });
+
+  it("uses stored API-key auth before reading environment variables", async () => {
+    process.env.OPENROUTER_API_KEY = "";
+    completeSimple.mockResolvedValue({
+      content: [{ type: "text", text: "ok" }],
+    });
+
+    const { createLLMAdapter } = await import("../src/llm/adapter.js");
+    const adapter = createLLMAdapter({
+      provider: "openrouter",
+      model: "openai/gpt-oss-20b",
+      apiKeyEnv: "OPENROUTER_API_KEY",
+      auth: {
+        type: "api-key",
+        apiKey: "stored-key",
+      },
+    });
+
+    await expect(adapter.complete([{ role: "user", content: "hi" }])).resolves.toBe("ok");
+    expect(completeSimple).toHaveBeenCalledWith(
+      { api: "responses" },
+      expect.any(Object),
+      expect.objectContaining({ apiKey: "stored-key" })
+    );
+  });
+
+  it("uses stored OAuth credentials for account-backed providers", async () => {
+    getOAuthApiKey.mockResolvedValue({
+      apiKey: "oauth-session-key",
+      newCredentials: {
+        refresh: "refresh-2",
+        access: "access-2",
+        expires: 456,
+        accountId: "acct_123",
+      },
+    });
+    completeSimple.mockResolvedValue({
+      content: [{ type: "text", text: "ok" }],
+    });
+
+    const onAuthRefresh = vi.fn();
+    const { createLLMAdapter } = await import("../src/llm/adapter.js");
+    const adapter = createLLMAdapter({
+      provider: "openai-codex",
+      model: "gpt-5.2-codex",
+      apiKeyEnv: "OPENAI_CODEX_OAUTH",
+      auth: {
+        type: "oauth",
+        credentials: {
+          refresh: "refresh-1",
+          access: "access-1",
+          expires: 123,
+          accountId: "acct_123",
+        },
+      },
+      onAuthRefresh,
+    });
+
+    await expect(adapter.complete([{ role: "user", content: "hi" }])).resolves.toBe("ok");
+    expect(getOAuthApiKey).toHaveBeenCalledWith("openai-codex", {
+      "openai-codex": {
+        type: "oauth",
+        refresh: "refresh-1",
+        access: "access-1",
+        expires: 123,
+        accountId: "acct_123",
+      },
+    });
+    expect(completeSimple).toHaveBeenCalledWith(
+      { api: "responses" },
+      expect.any(Object),
+      expect.objectContaining({ apiKey: "oauth-session-key" })
+    );
+    expect(onAuthRefresh).toHaveBeenCalledWith({
+      type: "oauth",
+      credentials: {
+        refresh: "refresh-2",
+        access: "access-2",
+        expires: 456,
+        accountId: "acct_123",
+      },
+    });
   });
 });

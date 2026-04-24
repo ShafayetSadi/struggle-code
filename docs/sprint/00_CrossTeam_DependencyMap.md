@@ -8,9 +8,9 @@ This map shows every hard dependency between team members. If you're waiting on 
 
 As of the latest local integration pass:
 
-- `packages/core` guided flow, standard mode, full socratic mode, ADR generation, and trail export are implemented
+- `packages/core` guided flow, standard mode, socratic mode, ADR generation, and trail export are implemented
 - `packages/cli` REPL is implemented with `/help`, `/mode`, `/share`, `/stuck`, `/hint`, `/trail export`, and `/exit`
-- prompt files in `packages/core/src/prompts/*.md` exist for classifier, quick help, debug, guided, standard, full socratic, ADRs, stuck flow, and hints
+- prompt files in `packages/core/src/prompts/*.md` exist for classifier, quick help, debug, guided, standard, socratic, ADRs, stuck flow, and hints
 - shared manual QA now lives in `docs/manual-testing.md`
 - the known recent fix is the guided interview guard: short meta-input like `what is this bug` should no longer be swallowed as a design answer
 - remaining work is integration QA, bug bash, demo polish, sample artifacts, and publish/submission prep
@@ -42,7 +42,7 @@ off   │     │     │ ed   │     │    │     │     │     ration│s
                           ided)                                       
 ```
 
-*"Core done" at H20 means Guided mode works end-to-end. Standard + Full Socratic arrive at H32/H36.*
+*“Core done” at H20 means Guided mode works end-to-end. Standard + Socratic arrive at H32/H36.*
 
 ---
 
@@ -56,7 +56,7 @@ off   │     │     │ ed   │     │    │     │     │     ration│s
 | Saima | Real `exportTrail()` | Done locally | No workaround needed now |
 | Arif | Sample ADR (committed to demo repo) | H17 | Arif hand-crafts a placeholder Markdown, swaps later |
 | Arif | Sample Learning Trail (committed to demo repo) | H22 | Same — placeholder first, real swap at H22 |
-| Jifat | Standard + Full Socratic modes in core | Done locally | Jifat should smoke-test pass-through and rendering now |
+| Jifat | Standard + Socratic modes in core | Done locally | Jifat should smoke-test pass-through and rendering now |
 
 ## Saima → Others
 

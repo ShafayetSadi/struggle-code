@@ -17,7 +17,7 @@ Already shipped locally:
 - guided interview flow with design brief writing
 - guided milestone loop with checkpoint and ADR generation
 - trail accumulation and Markdown export
-- standard mode and full socratic mode
+- standard mode and socratic mode
 - `packages/core/README.md`
 - regression fix: short meta-input during guided interview should no longer be recorded as a design answer
 
@@ -30,7 +30,7 @@ Recent integration notes:
 What remains on your side:
 
 - run and supervise the shared manual QA flow with a real provider key
-- fix integration bugs found in guided, standard, full socratic, trail export, and rendering boundaries
+- fix integration bugs found in guided, standard, socratic, trail export, and rendering boundaries
 - generate sample ADR and Trail artifacts for Arif
 - finish publish prep and submission-day smoke tests
 
@@ -140,7 +140,7 @@ Replace stubs in this specific order. After each one, **announce in the team cha
 
 **H20–H28:** Sleep. Phone on for emergencies only.
 
-### Phase 4 — Standard + Full Socratic Modes (H28–H36)
+### Phase 4 — Standard + Socratic Modes (H28–H36)
 
 #### Block 6: Standard Mode (H28–H32)
 
@@ -150,9 +150,9 @@ Replace stubs in this specific order. After each one, **announce in the team cha
 
 **Prompt:** `packages/core/src/prompts/standard-mode.md`
 
-#### Block 7: Full Socratic Mode (H32–H36)
+#### Block 7: Socratic Mode (H32–H36)
 
-**Replace:** Full Socratic path when user does `/mode full-socratic`.
+**Replace:** Socratic path when user does `/mode socratic`.
 
 **What to build:** Sub-problem decomposition (3–5 per user request), per-sub-problem Socratic questions (2–3 per sub-problem), answer evaluation against a threshold, minimal code chunks per sub-problem, Explain-It-Back checkpoint at the end.
 
@@ -200,7 +200,7 @@ Ignore the original build-order sections that are already complete. From this po
 | Blocked | What they need | By when | Risk if late |
 | --- | --- | --- | --- |
 | Saima | Integration answers and core bug fixes | Ongoing | CLI QA stalls if core questions sit unanswered |
-| Jifat | Stable behavior across guided, standard, full socratic, and trail reads | Ongoing | Extension polish gets blocked on undefined behavior |
+| Jifat | Stable behavior across guided, standard, socratic, and trail reads | Ongoing | Extension polish gets blocked on undefined behavior |
 | Arif | Sample ADR + sample Trail files | Next integration cycle | Landing page embeds remain placeholder |
 
 ---
@@ -221,7 +221,7 @@ Ignore the original build-order sections that are already complete. From this po
 
 **If pi-ai turns out to be broken or unsuitable:** Same as above. Don't waste time debugging someone else's package under time pressure.
 
-**If you fall 4+ hours behind by H12:** Cut Full Socratic mode from scope entirely. Ship Guided + Standard. Announce in team chat immediately so Jifat doesn't build UI for a mode that won't exist.
+**If you fall 4+ hours behind by H12:** Cut Socratic mode from scope entirely. Ship Guided + Standard. Announce in team chat immediately so Jifat doesn't build UI for a mode that won't exist.
 
 **If you fall 8+ hours behind by H24:** Execute Fallback MVP from master plan Section 6. Ship only Guided mode in both CLI and Extension. Landing page pitches the other two as "coming in v1.1."
 

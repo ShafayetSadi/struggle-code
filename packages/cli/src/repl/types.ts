@@ -9,6 +9,7 @@ export type SlashCommand =
   | { kind: "help" }
   | { kind: "exit" }
   | { kind: "mode"; mode: Mode }
+  | { kind: "model"; model?: string }
   | { kind: "share"; path: string }
   | { kind: "stuck" }
   | { kind: "hint"; level?: 1 | 2 | 3 }

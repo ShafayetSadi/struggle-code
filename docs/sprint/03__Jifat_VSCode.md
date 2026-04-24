@@ -107,7 +107,7 @@ Phone on for emergencies only.
 | Hour | Task |
 | --- | --- |
 | 32–34 | Full-team walkthrough. Capture every UX glitch in the extension into a bug list. |
-| 34–38 | Extension bug bash. Fix styling issues, streaming glitches, mode switching edge cases. If Sadi's Full Socratic or Standard modes are working by this point, add minimal UI support (at least the mode dropdown should include all three options and pass the value through). |
+| 34–38 | Extension bug bash. Fix styling issues, streaming glitches, mode switching edge cases. If Sadi's Socratic or Standard modes are working by this point, add minimal UI support (at least the mode dropdown should include all three options and pass the value through). |
 | 38–40 | Final VSIX build. README with install instructions. Optionally: publish to open-vsx.org if time permits (low priority, not required). |
 
 ### Phase 7 — Demo Support (H40–H48)

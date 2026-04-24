@@ -1,11 +1,35 @@
-export type Mode = "full-socratic" | "guided" | "standard";
+export type Mode = "socratic" | "guided" | "standard";
 export type Intent = "quick_help" | "debug" | "project";
-export type Provider = "anthropic" | "google" | "openai";
+export type Provider = "anthropic" | "google" | "openai" | "openrouter" | "openai-codex" | "google-antigravity";
+
+export interface OAuthCredentials {
+  refresh: string;
+  access: string;
+  expires: number;
+  enterpriseUrl?: string;
+  projectId?: string;
+  email?: string;
+  accountId?: string;
+}
+
+export interface OAuthProviderAuth {
+  type: "oauth";
+  credentials: OAuthCredentials;
+}
+
+export interface ApiKeyProviderAuth {
+  type: "api-key";
+  apiKey: string;
+}
+
+export type ProviderAuth = OAuthProviderAuth | ApiKeyProviderAuth;
 
 export interface ProviderConfig {
   provider: Provider;
   model: string; // e.g., "claude-sonnet-4-5", "gemini-2.5-flash", "gpt-4o"
-  apiKeyEnv: string; // name of env var, not the key itself
+  apiKeyEnv: string; // env var for API-key providers, identifier label for auth-backed providers
+  auth?: ProviderAuth;
+  onAuthRefresh?: (auth: ProviderAuth) => Promise<void> | void;
 }
 
 export interface SessionState {
