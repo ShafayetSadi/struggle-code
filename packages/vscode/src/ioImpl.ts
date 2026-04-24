@@ -1,6 +1,5 @@
-import * as vscode from "vscode";
-
 import type { IO } from "@struggle-ai/core";
+import * as vscode from "vscode";
 
 function decode(bytes: Uint8Array): string {
   return new TextDecoder().decode(bytes);

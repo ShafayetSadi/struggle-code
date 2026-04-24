@@ -7,17 +7,17 @@ import {
   CURSOR_MARKER,
   Input,
   Key,
-  type SelectItem,
   padToWidth,
+  type SelectItem,
   truncateToWidth,
   visibleWidth,
 } from "../pi-tui/src/index.js";
 import { commandMatches } from "./commandMenu.js";
 import {
   BUBBLE_THEMES,
-  P,
   chalk,
   modePill,
+  P,
   renderBubble,
   renderThinkingFrame,
   streamingCursor,
@@ -265,9 +265,9 @@ export class ReplScreen {
 
       if (!isStreamingEntry) {
         transcriptLines.push(
-          ...renderBubble(entry.kind as "user" | "assistant" | "error" | "system", entry.lines, w - 1).map(
-            (text) => ({ text })
-          )
+          ...renderBubble(entry.kind as "user" | "assistant" | "error" | "system", entry.lines, w - 1).map((text) => ({
+            text,
+          }))
         );
         return;
       }

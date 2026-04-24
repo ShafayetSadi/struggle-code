@@ -1,7 +1,7 @@
 import type { Component, SelectItem } from "../pi-tui/src/index.js";
-import { SelectList, padToWidth, renderPanel } from "../pi-tui/src/index.js";
+import { padToWidth, renderPanel, SelectList } from "../pi-tui/src/index.js";
 
-import { P, chalk } from "./palette.js";
+import { chalk, P } from "./palette.js";
 
 export class ModelMenu implements Component {
   private readonly list: SelectList;

@@ -12,6 +12,8 @@ describe("cli entry", () => {
     expect(parseSlashCommand("/mode socratic")).toEqual({ kind: "mode", mode: "socratic" });
     expect(parseSlashCommand("/mode standard")).toEqual({ kind: "mode", mode: "standard" });
     expect(parseSlashCommand("/model")).toEqual({ kind: "model" });
+    expect(parseSlashCommand("/login")).toEqual({ kind: "login" });
+    expect(parseSlashCommand("/login google-antigravity")).toEqual({ kind: "login", provider: "google-antigravity" });
     expect(parseSlashCommand("/model gemini-3-flash")).toEqual({
       kind: "model",
       model: "gemini-3-flash",

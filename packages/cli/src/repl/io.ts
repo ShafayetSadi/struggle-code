@@ -1,6 +1,6 @@
 import type { IO } from "@struggle-ai/core";
 
-import { P, chalk } from "./palette.js";
+import { chalk, P } from "./palette.js";
 
 export function createTuiIO(base: IO, writeLine: (value: string) => void): IO {
   return {

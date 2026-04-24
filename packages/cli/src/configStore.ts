@@ -4,11 +4,11 @@ import { dirname, join } from "node:path";
 
 import {
   DEFAULT_CONFIGS,
+  loadConfig,
   type OAuthCredentials,
   type Provider,
   type ProviderAuth,
   type ProviderConfig,
-  loadConfig,
 } from "@struggle-ai/core";
 
 export const CONFIG_DIR = join(homedir(), ".struggle-ai");

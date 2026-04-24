@@ -6,13 +6,25 @@
   "publisher": "struggle-ai",
   "private": true,
   "icon": "media/icon.png",
-  "categories": ["Machine Learning", "Education", "Other"],
-  "keywords": ["ai", "coding", "mentor", "socratic", "learning"],
+  "categories": [
+    "Machine Learning",
+    "Education",
+    "Other"
+  ],
+  "keywords": [
+    "ai",
+    "coding",
+    "mentor",
+    "socratic",
+    "learning"
+  ],
   "engines": {
     "vscode": "^1.85.0"
   },
   "main": "./dist/extension.js",
-  "activationEvents": ["onCommand:struggle.start"],
+  "activationEvents": [
+    "onCommand:struggle.start"
+  ],
   "contributes": {
     "commands": [
       {

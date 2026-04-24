@@ -5,29 +5,29 @@ import { renderTrailMarkdown } from "../artifacts/trail.js";
 import { DEFAULT_CONFIGS } from "../config.js";
 import { classifyIntentWithDeps } from "../gate/classifier.js";
 import {
-  type DesignQuestion,
   buildFallbackDesignQuestions,
   buildGuidedCodeChunk,
   createDesignBriefMarkdown,
   createGuidedState,
+  type DesignQuestion,
   deriveMilestones,
   getCurrentDesignQuestion,
   shouldFinishInterview,
 } from "../guided/flow.js";
 import type { Session } from "../index.js";
-import { type LLMAdapter, createLLMAdapter } from "../llm/adapter.js";
+import { createLLMAdapter, type LLMAdapter } from "../llm/adapter.js";
 import { collectStream, safeComplete } from "../llm/runtime.js";
 import { loadPrompt } from "../prompts/loader.js";
 import { buildMinimalCodeChunk, createSocraticState } from "../socratic/flow.js";
 import { buildStandardCodeChunk, createStandardState, needsClarification } from "../standard/flow.js";
-import type { ADR, IO, Intent, Mode, ProviderConfig, ResponseChunk, TrailEntry } from "../types.js";
+import type { ADR, Intent, IO, Mode, ProviderConfig, ResponseChunk, TrailEntry } from "../types.js";
 import {
-  type RuntimeSessionContext,
   bumpUnderstanding,
   createInitialState,
   createTrailEntry,
   deriveDisplayState,
   now,
+  type RuntimeSessionContext,
   touchState,
 } from "./state.js";
 
@@ -555,7 +555,7 @@ export async function createSessionEngine(projectPath: string, io: IO, config?: 
     return chunks;
   }
 
-  async function continueSocratic(message: string): Promise<ResponseChunk[]> {
+  async function continueSocratic(_message: string): Promise<ResponseChunk[]> {
     const socratic = runtime.socratic;
     if (!socratic) return [];
     const current = socratic.subProblems[socratic.activeSubProblemIndex];

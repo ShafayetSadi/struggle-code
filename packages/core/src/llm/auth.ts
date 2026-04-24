@@ -1,4 +1,4 @@
-import { getOAuthApiKey } from "@mariozechner/pi-ai";
+import { getOAuthApiKey } from "@mariozechner/pi-ai/oauth";
 
 import type { Provider, ProviderAuth, ProviderConfig } from "../types.js";
 

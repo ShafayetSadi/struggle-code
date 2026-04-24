@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_CONFIGS } from "../src/config.js";
 import { startSession } from "../src/index.js";
 import { createLLMAdapter } from "../src/llm/adapter.js";
-import { MemoryIO, collectChunks } from "./test-helpers.js";
+import { collectChunks, MemoryIO } from "./test-helpers.js";
 
 const runIntegration = process.env.RUN_INTEGRATION_TESTS === "1" && Boolean(process.env.ANTHROPIC_API_KEY);
 const describeIf = runIntegration ? describe : describe.skip;

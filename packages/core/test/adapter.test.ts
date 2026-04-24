@@ -9,6 +9,9 @@ vi.mock("@mariozechner/pi-ai", () => ({
   completeSimple,
   streamSimple,
   getModel,
+}));
+
+vi.mock("@mariozechner/pi-ai/oauth", () => ({
   getOAuthApiKey,
 }));
 

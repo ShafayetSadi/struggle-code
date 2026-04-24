@@ -1,10 +1,11 @@
 import type { Component, SelectItem } from "../pi-tui/src/index.js";
 import { Key, padToWidth, truncateToWidth } from "../pi-tui/src/index.js";
 
-import { P, chalk } from "./palette.js";
+import { chalk, P } from "./palette.js";
 
 const TOP_LEVEL_ITEMS: SelectItem[] = [
   { value: "/help ", label: "/help", description: "Hints & stuck commands" },
+  { value: "/login", label: "/login", description: "Authenticate the active OAuth provider" },
   { value: "/logout", label: "/logout", description: "Clear saved credentials for the active provider" },
   { value: "/mode ", label: "/mode", description: "Switch learning mode" },
   { value: "/model", label: "/model", description: "Show active model or switch model" },

@@ -1,6 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
 import type { AgentEvent } from "@mariozechner/pi-agent-core";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@mariozechner/pi-ai", () => ({
   getModel: vi.fn(() => ({
@@ -20,6 +19,9 @@ vi.mock("@mariozechner/pi-ai", () => ({
     contextWindow: 200_000,
     maxTokens: 8_000,
   })),
+}));
+
+vi.mock("@mariozechner/pi-ai/oauth", () => ({
   getOAuthApiKey: vi.fn(),
 }));
 
@@ -29,22 +31,46 @@ vi.mock("@mariozechner/pi-agent-core", () => {
     static instances: MockAgent[] = [];
 
     listeners = new Set<(event: AgentEvent) => void>();
-    systemPrompt = "";
-    thinkingLevel = "medium";
-    tools: unknown[] = [];
-    messages: string[] = [];
+    state: {
+      systemPrompt: string;
+      thinkingLevel: string;
+      tools: unknown[];
+      messages: string[];
+      model?: unknown;
+    };
 
     constructor(options?: {
       initialState?: {
         systemPrompt?: string;
         thinkingLevel?: string;
         tools?: unknown[];
+        model?: unknown;
       };
     }) {
-      this.systemPrompt = options?.initialState?.systemPrompt ?? "";
-      this.thinkingLevel = options?.initialState?.thinkingLevel ?? "medium";
-      this.tools = options?.initialState?.tools ?? [];
+      this.state = {
+        systemPrompt: options?.initialState?.systemPrompt ?? "",
+        thinkingLevel: options?.initialState?.thinkingLevel ?? "medium",
+        tools: options?.initialState?.tools ?? [],
+        messages: [],
+        model: options?.initialState?.model,
+      };
       MockAgent.instances.push(this);
+    }
+
+    get systemPrompt() {
+      return this.state.systemPrompt;
+    }
+
+    get thinkingLevel() {
+      return this.state.thinkingLevel;
+    }
+
+    get tools() {
+      return this.state.tools;
+    }
+
+    get messages() {
+      return this.state.messages;
     }
 
     subscribe(fn: (event: AgentEvent) => void) {
@@ -54,16 +80,8 @@ vi.mock("@mariozechner/pi-agent-core", () => {
       };
     }
 
-    setSystemPrompt(value: string) {
-      this.systemPrompt = value;
-    }
-
-    setThinkingLevel(value: string) {
-      this.thinkingLevel = value;
-    }
-
     async prompt(message: string) {
-      this.messages.push(message);
+      this.state.messages.push(message);
       for (const event of MockAgent.events) {
         for (const listener of this.listeners) {
           listener(event);
@@ -76,7 +94,7 @@ vi.mock("@mariozechner/pi-agent-core", () => {
 });
 
 import { startSession } from "../src/index.js";
-import { MemoryIO, collectChunks } from "./test-helpers.js";
+import { collectChunks, MemoryIO } from "./test-helpers.js";
 
 const MockAgentClass = (await import("@mariozechner/pi-agent-core")).Agent as unknown as {
   events: AgentEvent[];
@@ -85,6 +103,13 @@ const MockAgentClass = (await import("@mariozechner/pi-agent-core")).Agent as un
     thinkingLevel: string;
     tools: Array<{ name: string }>;
     messages: string[];
+    state: {
+      systemPrompt: string;
+      thinkingLevel: string;
+      tools: Array<{ name: string }>;
+      messages: string[];
+      model?: unknown;
+    };
   }>;
 };
 
@@ -182,29 +207,29 @@ describe("coding agent session", () => {
     const session = await startSession("/tmp/project", io);
     const agent = MockAgentClass.instances[0];
 
-    expect(agent.tools.map((tool) => tool.name).sort()).toEqual([
+    expect(agent?.tools.map((tool) => tool.name).sort()).toEqual([
       "list_files",
       "read_file",
       "run_command",
       "search_files",
       "write_file",
     ]);
-    expect(agent.systemPrompt).toContain(
+    expect(agent?.systemPrompt).toContain(
       "Start by inspecting the relevant code and building a concrete implementation plan before any coding."
     );
-    expect(agent.systemPrompt).toContain(
+    expect(agent?.systemPrompt).toContain(
       "Do not install packages, create virtual environments, or diagnose unrelated dependencies unless the user asked for environment help or the task is blocked on a confirmed missing dependency."
     );
 
     session.setMode("socratic");
-    expect(agent.thinkingLevel).toBe("high");
-    expect(agent.systemPrompt).toContain("Current mode: socratic.");
-    expect(agent.systemPrompt).toContain(
+    expect(agent?.thinkingLevel).toBe("high");
+    expect(agent?.systemPrompt).toContain("Current mode: socratic.");
+    expect(agent?.systemPrompt).toContain(
       "Before each phase executes, require the user to explain that phase's goal, file ownership, and verification path back in their own words."
     );
 
     await session.shareFile("/tmp/project/src/app.ts");
-    expect(agent.systemPrompt).toContain("/tmp/project/src/app.ts");
+    expect(agent?.systemPrompt).toContain("/tmp/project/src/app.ts");
   });
 
   it("pauses guided mode after the plan and before each phase execution", async () => {
@@ -527,14 +552,11 @@ describe("coding agent session", () => {
     expect(
       firstTurn.some(
         (chunk) =>
-          chunk.kind === "text" &&
-          chunk.value.includes("Socratic mode is mapping the work before any coding starts.")
+          chunk.kind === "text" && chunk.value.includes("Socratic mode is mapping the work before any coding starts.")
       )
     ).toBe(true);
     expect(
-      firstTurn.some(
-        (chunk) => chunk.kind === "text" && chunk.value.includes("Socratic mode is ready for phase 1")
-      )
+      firstTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("Socratic mode is ready for phase 1"))
     ).toBe(true);
     expect(firstTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("Before I execute phase 1"))).toBe(
       true
@@ -581,9 +603,7 @@ describe("coding agent session", () => {
     ).toBe(true);
     expect(MockAgentClass.instances[0]?.messages[0]).toContain("Execute only phase 1");
     expect(
-      fourthTurn.some(
-        (chunk) => chunk.kind === "text" && chunk.value.includes("Socratic mode is ready for phase 2")
-      )
+      fourthTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("Socratic mode is ready for phase 2"))
     ).toBe(true);
     expect(fourthTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("Before I execute phase 2"))).toBe(
       true
@@ -601,8 +621,7 @@ describe("coding agent session", () => {
     expect(
       firstTurn.some(
         (chunk) =>
-          chunk.kind === "text" &&
-          chunk.value.includes("Socratic mode is mapping the work before any coding starts.")
+          chunk.kind === "text" && chunk.value.includes("Socratic mode is mapping the work before any coding starts.")
       )
     ).toBe(true);
     expect(firstTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("Before I execute phase 1"))).toBe(

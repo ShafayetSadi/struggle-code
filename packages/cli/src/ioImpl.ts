@@ -1,9 +1,7 @@
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-
-import chalk from "chalk";
-
 import type { IO } from "@struggle-ai/core";
+import chalk from "chalk";
 
 export const cliIO: IO = {
   async readFile(path) {

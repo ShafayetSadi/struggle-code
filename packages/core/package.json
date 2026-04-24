@@ -5,19 +5,21 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json && node -e \"const fs=require('node:fs'); fs.mkdirSync('dist/prompts',{recursive:true}); for (const file of fs.readdirSync('src/prompts')) { if (file.endsWith('.md')) fs.copyFileSync('src/prompts/' + file, 'dist/prompts/' + file); }\"",
     "dev": "tsc -p tsconfig.json --watch",
     "test": "vitest run"
   },
   "dependencies": {
-    "@sinclair/typebox": "^0.34.41",
-    "@mariozechner/pi-agent-core": "^0.44.0",
-    "@mariozechner/pi-ai": "^0.44.0",
+    "@mariozechner/pi-agent-core": "^0.70.2",
+    "@mariozechner/pi-ai": "^0.70.2",
+    "@sinclair/typebox": "^0.34.49",
     "uuid": "^14.0.0",
     "vitest": "4.1.5",
-    "vscode": "1.1.36",
+    "vscode": "1.1.37",
     "zod": "^4.3.6"
   },
   "devDependencies": {

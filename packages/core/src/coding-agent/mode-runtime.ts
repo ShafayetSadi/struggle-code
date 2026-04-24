@@ -1,4 +1,4 @@
-import { readFile, readdir } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { basename, extname, join, relative, resolve, sep } from "node:path";
 
 import type { LLMAdapter } from "../llm/adapter.js";

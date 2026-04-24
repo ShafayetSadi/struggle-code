@@ -14,6 +14,7 @@ export type SlashCommand =
   | { kind: "clear" }
   | { kind: "new" }
   | { kind: "exit" }
+  | { kind: "login"; provider?: string }
   | { kind: "logout" }
   | { kind: "mode"; mode: Mode }
   | { kind: "model"; model?: string }

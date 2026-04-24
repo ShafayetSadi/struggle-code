@@ -69,7 +69,10 @@ export const Key = {
 // ─── ANSI Utilities ───────────────────────────────────────────────────────────
 
 // Matches all ANSI escape sequences (colors, movement, etc.)
-const ANSI_ESCAPE_RE = /\x1b\[[0-9;]*[A-Za-z]/g;
+const ANSI_ESCAPE_RE = new RegExp("\\u001b\\[[0-9;]*[A-Za-z]", "g");
+const BRACKETED_PASTE_RE = new RegExp("^\\u001b\\[200~([\\s\\S]*)\\u001b\\[201~$");
+const SGR_WHEEL_UP_RE = new RegExp("^\\u001b\\[<64;\\d+;\\d+[mM]$");
+const SGR_WHEEL_DOWN_RE = new RegExp("^\\u001b\\[<65;\\d+;\\d+[mM]$");
 
 export function visibleWidth(text: string): number {
   return text.replace(ANSI_ESCAPE_RE, "").length;
@@ -123,7 +126,7 @@ export function wrapTextWithAnsi(text: string, width: number): string[] {
       current = word;
       currentWidth = wordWidth;
     } else if (currentWidth + 1 + wordWidth <= width) {
-      current += " " + word;
+      current += ` ${word}`;
       currentWidth += 1 + wordWidth;
     } else {
       lines.push(current);
@@ -177,10 +180,16 @@ export class Input implements Component {
 
   onSubmit?: (value: string) => void;
 
-  get focused(): boolean { return this._focused; }
-  set focused(v: boolean) { this._focused = v; }
+  get focused(): boolean {
+    return this._focused;
+  }
+  set focused(v: boolean) {
+    this._focused = v;
+  }
 
-  getValue(): string { return this.value; }
+  getValue(): string {
+    return this.value;
+  }
 
   setValue(v: string): void {
     this.value = v;
@@ -191,13 +200,12 @@ export class Input implements Component {
 
   private insertText(text: string): void {
     if (text.length === 0) return;
-    this.value =
-      this.value.slice(0, this.cursor) + text + this.value.slice(this.cursor);
+    this.value = this.value.slice(0, this.cursor) + text + this.value.slice(this.cursor);
     this.cursor += text.length;
   }
 
   private normalizePastedText(data: string): string | undefined {
-    const bracketedPasteMatch = /^\x1b\[200~([\s\S]*)\x1b\[201~$/.exec(data);
+    const bracketedPasteMatch = BRACKETED_PASTE_RE.exec(data);
     if (bracketedPasteMatch) {
       return bracketedPasteMatch[1] ?? "";
     }
@@ -224,16 +232,14 @@ export class Input implements Component {
       case Key.backspace:
       case "\b":
         if (this.cursor > 0) {
-          this.value =
-            this.value.slice(0, this.cursor - 1) + this.value.slice(this.cursor);
+          this.value = this.value.slice(0, this.cursor - 1) + this.value.slice(this.cursor);
           this.cursor--;
         }
         break;
 
       case Key.delete:
         if (this.cursor < this.value.length) {
-          this.value =
-            this.value.slice(0, this.cursor) + this.value.slice(this.cursor + 1);
+          this.value = this.value.slice(0, this.cursor) + this.value.slice(this.cursor + 1);
         }
         break;
 
@@ -253,7 +259,7 @@ export class Input implements Component {
         this.cursor = this.value.length;
         break;
 
-      default:
+      default: {
         // Accept both typed characters and pasted text blocks.
         if (data.length === 1 && data >= " ") {
           this.insertText(data);
@@ -264,6 +270,7 @@ export class Input implements Component {
         if (pasted !== undefined) {
           this.insertText(pasted.replace(/\r\n/g, "\n").replace(/\r/g, "\n"));
         }
+      }
     }
   }
 
@@ -330,10 +337,7 @@ export class SelectList implements Component {
 
       case Key.down:
       case "\x1b[B":
-        this.selectedIndex = Math.min(
-          this.filtered.length - 1,
-          this.selectedIndex + 1
-        );
+        this.selectedIndex = Math.min(this.filtered.length - 1, this.selectedIndex + 1);
         this.clampScroll();
         break;
 
@@ -366,9 +370,7 @@ export class SelectList implements Component {
     const q = this.query.toLowerCase();
     this.filtered = q
       ? this.items.filter(
-          (item) =>
-            item.label.toLowerCase().includes(q) ||
-            (item.description ?? "").toLowerCase().includes(q)
+          (item) => item.label.toLowerCase().includes(q) || (item.description ?? "").toLowerCase().includes(q)
         )
       : [...this.items];
     this.selectedIndex = 0;
@@ -393,10 +395,7 @@ export class SelectList implements Component {
       return lines;
     }
 
-    const visible = this.filtered.slice(
-      this.scrollOffset,
-      this.scrollOffset + this.visibleCount
-    );
+    const visible = this.filtered.slice(this.scrollOffset, this.scrollOffset + this.visibleCount);
 
     for (let i = 0; i < visible.length; i++) {
       const item = visible[i];
@@ -410,12 +409,8 @@ export class SelectList implements Component {
       let desc = item.description ?? "";
 
       if (isSelected) {
-        const prefix = this.theme.selectedPrefix
-          ? this.theme.selectedPrefix("▸ ")
-          : "▸ ";
-        const labelText = this.theme.selectedText
-          ? this.theme.selectedText(item.label)
-          : item.label;
+        const prefix = this.theme.selectedPrefix ? this.theme.selectedPrefix("▸ ") : "▸ ";
+        const labelText = this.theme.selectedText ? this.theme.selectedText(item.label) : item.label;
         label = prefix + labelText;
         if (desc && this.theme.description) {
           desc = this.theme.description(desc);
@@ -460,8 +455,12 @@ export class ProcessTerminal {
     });
   }
 
-  getWidth(): number { return this.width; }
-  getHeight(): number { return this.height; }
+  getWidth(): number {
+    return this.width;
+  }
+  getHeight(): number {
+    return this.height;
+  }
 
   write(text: string): void {
     process.stdout.write(text);
@@ -588,18 +587,9 @@ export class TUI {
       const sliced = overlayLines.slice(0, maxH);
 
       // Center horizontally and clamp vertically so overlays stay visible.
-      const startCol = Math.max(
-        0,
-        Math.floor((width - overlayWidth) / 2)
-      );
+      const startCol = Math.max(0, Math.floor((width - overlayWidth) / 2));
       const offsetY = overlay.options.offsetY ?? 0;
-      const startRow = this.resolveOverlayStartRow(
-        overlay.options,
-        height,
-        lines.length,
-        sliced.length,
-        offsetY
-      );
+      const startRow = this.resolveOverlayStartRow(overlay.options, height, lines.length, sliced.length, offsetY);
 
       for (let i = 0; i < sliced.length; i++) {
         const row = startRow + i;
@@ -634,10 +624,7 @@ export class TUI {
     // Diff render — only write lines that changed
     this.terminal.hideCursor();
 
-    const totalLines = Math.max(
-      processedLines.length,
-      this.lastRenderedLines.length
-    );
+    const totalLines = Math.max(processedLines.length, this.lastRenderedLines.length);
 
     for (let i = 0; i < totalLines; i++) {
       const newLine = processedLines[i] ?? "";
@@ -751,10 +738,10 @@ export class TUI {
 
   private normalizeMouseInput(data: string): string {
     // SGR mouse wheel: ESC [ < 64;col;row M = wheel up, 65 = wheel down
-    if (/^\x1b\[<64;\d+;\d+[mM]$/.test(data)) {
+    if (SGR_WHEEL_UP_RE.test(data)) {
       return Key.pageUp;
     }
-    if (/^\x1b\[<65;\d+;\d+[mM]$/.test(data)) {
+    if (SGR_WHEEL_DOWN_RE.test(data)) {
       return Key.pageDown;
     }
     return data;

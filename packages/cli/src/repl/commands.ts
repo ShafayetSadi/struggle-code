@@ -3,12 +3,13 @@ import { join, resolve } from "node:path";
 import type { Mode, Session } from "@struggle-ai/core";
 
 import { formatChunk } from "./formatting.js";
-import { P, chalk } from "./palette.js";
+import { chalk, P } from "./palette.js";
 import type { ReplState, SlashCommand } from "./types.js";
 
 export const ROOT_MENU_TEXT = `
 Commands:
   /help                     Hints & stuck commands
+  /login [provider]         Authenticate the active or selected OAuth provider
   /logout                   Clear saved credentials for the active provider
   /mode                     Show available learning modes
   /model [model-id]         Show active model or switch models
@@ -60,6 +61,8 @@ export function parseSlashCommand(input: string): SlashCommand | undefined {
     case "exit":
     case "quit":
       return { kind: "exit" };
+    case "login":
+      return args.length > 0 ? { kind: "login", provider: args.join(" ") } : { kind: "login" };
     case "logout":
       return { kind: "logout" };
     case "model":
@@ -120,6 +123,7 @@ export async function handleSlashCommand(
   projectPath: string,
   replState: ReplState,
   handleModelCommand: (model?: string) => Promise<string[]>,
+  handleLoginCommand: (provider?: string) => Promise<string[]>,
   handleLogoutCommand: () => Promise<string[]>,
   writeLine: (value: string) => void,
   writeLines: (values: string[]) => void
@@ -145,6 +149,9 @@ export async function handleSlashCommand(
       return "continue";
     case "exit":
       return "exit";
+    case "login":
+      writeLines(await handleLoginCommand(command.provider));
+      return "continue";
     case "logout":
       writeLines(await handleLogoutCommand());
       return "continue";
@@ -181,5 +188,4 @@ export async function handleSlashCommand(
   }
 }
 
-export type { ReplState, SlashCommand };
-export type { Mode };
+export type { Mode, ReplState, SlashCommand };

@@ -1,26 +1,58 @@
-import { type Interface, createInterface } from "node:readline/promises";
+import { createInterface, type Interface } from "node:readline/promises";
 
 import { getModels } from "@mariozechner/pi-ai";
-import { DEFAULT_CONFIGS, type IO, type ProviderConfig, startSession } from "@struggle-ai/core";
+import { DEFAULT_CONFIGS, type IO, type Provider, type ProviderConfig, startSession } from "@struggle-ai/core";
 
-import { CONFIG_PATH, clearSavedAuth, writeConfigFile } from "./configStore.js";
+import { CONFIG_PATH, clearSavedAuth, getCurrentConfig, OAUTH_PROVIDERS, writeConfigFile } from "./configStore.js";
 import { cliIO } from "./ioImpl.js";
+import { runOAuthLogin } from "./oauthLogin.js";
 import { Key, ProcessTerminal, TUI } from "./pi-tui/src/index.js";
 import { copyToClipboard } from "./repl/clipboard.js";
 import {
   HELP_TEXT,
-  ROOT_MENU_TEXT,
   handleSlashCommand,
   parseSlashCommand,
+  ROOT_MENU_TEXT,
   streamChunks,
   syncHintState,
 } from "./repl/commands.js";
-import { P, chalk, formatChunk, formatPrompt } from "./repl/formatting.js";
+import { chalk, formatChunk, formatPrompt, P } from "./repl/formatting.js";
 import { createTuiIO } from "./repl/io.js";
+import { ModelMenu } from "./repl/modelMenu.js";
 import { ReplScreen } from "./repl/screen.js";
 import type { ReplState, SlashCommand } from "./repl/types.js";
 
 const COMMAND_HINT = "type / for commands";
+type ModelInfo = { id: string };
+
+function resolveModelId(requested: string, available: ModelInfo[]): string | undefined {
+  const exact = available.find((entry) => entry.id === requested);
+  if (exact) return exact.id;
+
+  const lower = requested.toLowerCase();
+  const caseInsensitive = available.find((entry) => entry.id.toLowerCase() === lower);
+  if (caseInsensitive) return caseInsensitive.id;
+
+  const prefixMatches = available.filter((entry) => entry.id.toLowerCase().startsWith(lower));
+  if (prefixMatches.length === 1) {
+    return prefixMatches[0]?.id;
+  }
+
+  return undefined;
+}
+
+function formatModelOverview(provider: string, currentModel: string, available: ModelInfo[]): string[] {
+  const lines = [`active model ${provider}/${currentModel}`, "available models:"];
+  const limit = 20;
+  for (const model of available.slice(0, limit)) {
+    const marker = model.id === currentModel ? "*" : " ";
+    lines.push(`${marker} ${model.id}`);
+  }
+  if (available.length > limit) {
+    lines.push(`…and ${available.length - limit} more`);
+  }
+  return lines;
+}
 
 function stripRuntimeAuth(config: ProviderConfig): ProviderConfig {
   const nextConfig: ProviderConfig = {
@@ -40,6 +72,23 @@ function shouldCaptureCommandOutput(command: SlashCommand): boolean {
   return (
     command.kind !== "root-menu" && command.kind !== "help" && command.kind !== "mode-menu" && command.kind !== "copy"
   );
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Unknown REPL error";
+}
+
+function requiresOAuthLogin(config: ProviderConfig): boolean {
+  const auth = (config as ProviderConfig & { auth?: { type?: string } }).auth;
+  return OAUTH_PROVIDERS.has(config.provider) && auth?.type !== "oauth";
+}
+
+function oauthRecoveryLines(provider: string): string[] {
+  return [`Missing account login for ${provider}.`, "Run: /login", `Or: struggle config login ${provider}`];
+}
+
+function isModelUnavailableMessage(message: string): boolean {
+  return /no longer available|model .* not available|please switch/i.test(message.toLowerCase());
 }
 
 export interface RunReplOptions {
@@ -67,18 +116,21 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
   });
 
   const handleModelCommand = async (model?: string): Promise<string[]> => {
+    const available = getModels(currentConfig.provider) as ModelInfo[];
+
     if (!model) {
-      return [`active model ${currentConfig.provider}/${currentConfig.model}`];
+      return formatModelOverview(currentConfig.provider, currentConfig.model, available);
     }
 
-    const available = getModels(currentConfig.provider);
-    if (!available.some((entry) => entry.id === model)) {
-      return [`Unknown model for ${currentConfig.provider}: ${model}`];
+    const resolvedModel = resolveModelId(model, available);
+    if (!resolvedModel) {
+      const suggestions = available.slice(0, 8).map((entry) => `  - ${entry.id}`);
+      return [`Unknown model for ${currentConfig.provider}: ${model}`, "Try one of:", ...suggestions];
     }
 
     currentConfig = {
       ...currentConfig,
-      model,
+      model: resolvedModel,
       apiKeyEnv: DEFAULT_CONFIGS[currentConfig.provider].apiKeyEnv,
     };
     session.setProviderConfig(currentConfig);
@@ -92,6 +144,20 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
     currentConfig = stripRuntimeAuth(currentConfig);
     session.setProviderConfig(currentConfig);
     return [`logged out from ${provider}`];
+  };
+
+  const handleLoginCommand = async (providerInput?: string): Promise<string[]> => {
+    const provider = (providerInput ?? currentConfig.provider) as Provider;
+    if (!OAUTH_PROVIDERS.has(provider)) {
+      return [`Provider does not support OAuth login: ${provider}`];
+    }
+
+    await runOAuthLogin(provider);
+    if (provider === currentConfig.provider) {
+      currentConfig = await getCurrentConfig();
+      session.setProviderConfig(currentConfig);
+    }
+    return [`logged in to ${provider}`];
   };
 
   process.stdout.write(chalk.hex(P.textPrimary).bold("Struggle AI") + chalk.hex(P.textMuted)("  interactive\n"));
@@ -141,6 +207,7 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
             projectPath,
             replState,
             handleModelCommand,
+            handleLoginCommand,
             handleLogoutCommand,
             (line) => {
               commandOutput.push(line);
@@ -160,6 +227,13 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
           continue;
         }
 
+        if (requiresOAuthLogin(currentConfig)) {
+          for (const line of oauthRecoveryLines(currentConfig.provider)) {
+            process.stdout.write(`${chalk.hex(P.yellow)(line)}\n`);
+          }
+          continue;
+        }
+
         process.stdout.write(chalk.hex(P.textMuted)("  working...\r"));
         const responseLines: string[] = [];
         await streamChunks(session.sendMessage(trimmed), (chunk) => {
@@ -171,8 +245,17 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
         syncHintState(session, replState);
         process.stdout.write("\n");
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown REPL error";
+        const message = getErrorMessage(error);
         io.notify("error", message);
+
+        if (message.includes("Missing account login for")) {
+          for (const line of oauthRecoveryLines(currentConfig.provider)) {
+            process.stdout.write(`${chalk.hex(P.yellow)(line)}\n`);
+          }
+        } else if (isModelUnavailableMessage(message)) {
+          process.stdout.write(`${chalk.hex(P.yellow)("The current model is unavailable.")}\n`);
+          process.stdout.write(`${chalk.hex(P.textMuted)("Run /model to select a different model.")}\n`);
+        }
       }
     }
   } finally {
@@ -227,18 +310,21 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
   );
 
   const handleModelCommand = async (model?: string): Promise<string[]> => {
+    const available = getModels(currentConfig.provider) as ModelInfo[];
+
     if (!model) {
-      return [`active model ${currentConfig.provider}/${currentConfig.model}`];
+      return formatModelOverview(currentConfig.provider, currentConfig.model, available);
     }
 
-    const available = getModels(currentConfig.provider);
-    if (!available.some((entry) => entry.id === model)) {
-      return [`Unknown model for ${currentConfig.provider}: ${model}`];
+    const resolvedModel = resolveModelId(model, available);
+    if (!resolvedModel) {
+      const suggestions = available.slice(0, 8).map((entry) => `  - ${entry.id}`);
+      return [`Unknown model for ${currentConfig.provider}: ${model}`, "Try one of:", ...suggestions];
     }
 
     currentConfig = {
       ...currentConfig,
-      model,
+      model: resolvedModel,
       apiKeyEnv: DEFAULT_CONFIGS[currentConfig.provider].apiKeyEnv,
     };
     session.setProviderConfig(currentConfig);
@@ -254,6 +340,27 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
     return [`logged out from ${provider}`];
   };
 
+  const handleLoginCommand = async (providerInput?: string): Promise<string[]> => {
+    const provider = (providerInput ?? currentConfig.provider) as Provider;
+    if (!OAUTH_PROVIDERS.has(provider)) {
+      return [`Provider does not support OAuth login: ${provider}`];
+    }
+
+    tui.stop();
+    try {
+      await runOAuthLogin(provider);
+    } finally {
+      tui.start();
+    }
+
+    if (provider === currentConfig.provider) {
+      currentConfig = await getCurrentConfig();
+      session.setProviderConfig(currentConfig);
+    }
+    refreshSessionState();
+    return [`logged in to ${provider}`];
+  };
+
   for (const line of pending.splice(0)) screen.append("system", line);
   screen.append("system", COMMAND_HINT);
 
@@ -263,6 +370,43 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
   const close = () => {
     tui.stop();
     resolveExit?.();
+  };
+
+  let modelMenuOpen = false;
+  const openModelMenu = () => {
+    if (modelMenuOpen) return;
+    modelMenuOpen = true;
+
+    const items = (getModels(currentConfig.provider) as ModelInfo[]).map((model) => ({
+      value: model.id,
+      label: model.id,
+      ...(model.id === currentConfig.model ? { description: "current" } : {}),
+    }));
+
+    const overlay = tui.showOverlay(
+      new ModelMenu(
+        items,
+        currentConfig.model,
+        (item) => {
+          overlay.hide();
+          modelMenuOpen = false;
+          tui.setFocus(screen);
+          void submitValue(`/model ${item.value}`);
+        },
+        () => {
+          overlay.hide();
+          modelMenuOpen = false;
+          tui.setFocus(screen);
+          tui.requestRender();
+        }
+      ),
+      {
+        width: "100%",
+        minWidth: 50,
+        maxHeight: 16,
+        anchor: "bottom-center",
+      }
+    );
   };
 
   const refreshSessionState = () => {
@@ -301,6 +445,10 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
         if (command.kind === "mode-menu") {
           screen.setInputValue("/mode ");
           tui.requestRender();
+          return;
+        }
+        if (command.kind === "model" && (!("model" in command) || !command.model)) {
+          openModelMenu();
           return;
         }
 
@@ -351,6 +499,7 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
           projectPath,
           replState,
           handleModelCommand,
+          handleLoginCommand,
           handleLogoutCommand,
           trackedWriteLine,
           trackedWriteLines
@@ -370,6 +519,14 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
 
       screen.clearInput();
       screen.append("user", trimmed);
+
+      if (requiresOAuthLogin(currentConfig)) {
+        for (const line of oauthRecoveryLines(currentConfig.provider)) {
+          screen.append("system", line);
+        }
+        return;
+      }
+
       screen.setBusy(true);
       screen.startThinking(() => tui.requestRender());
       tui.requestRender();
@@ -400,8 +557,18 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
     } catch (error) {
       screen.stopThinking();
       screen.stopStreaming();
-      const message = error instanceof Error ? error.message : "Unknown REPL error";
+      const message = getErrorMessage(error);
       screen.append("error", message);
+
+      if (message.includes("Missing account login for")) {
+        for (const line of oauthRecoveryLines(currentConfig.provider)) {
+          screen.append("system", line);
+        }
+      } else if (isModelUnavailableMessage(message)) {
+        screen.append("system", "The current model is unavailable.");
+        screen.append("system", "Opening model picker…");
+        openModelMenu();
+      }
     } finally {
       screen.setBusy(false);
       flushPending();
@@ -426,4 +593,4 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
   }
 }
 
-export { HELP_TEXT, ROOT_MENU_TEXT, formatPrompt, parseSlashCommand };
+export { formatPrompt, HELP_TEXT, parseSlashCommand, ROOT_MENU_TEXT };

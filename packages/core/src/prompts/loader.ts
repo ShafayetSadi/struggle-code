@@ -35,7 +35,9 @@ function sourcePromptPath(name: PromptName): string {
 
 export async function loadPrompt(name: PromptName, io?: IO, overridePath?: string): Promise<string> {
   const candidatePaths = Array.from(
-    new Set([overridePath, bundledPromptPath(name), sourcePromptPath(name)].filter((value): value is string => Boolean(value)))
+    new Set(
+      [overridePath, bundledPromptPath(name), sourcePromptPath(name)].filter((value): value is string => Boolean(value))
+    )
   );
 
   for (const candidatePath of candidatePaths) {

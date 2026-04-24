@@ -1,7 +1,7 @@
 import type { Mode, ResponseChunk } from "@struggle-ai/core";
 
 import { padToWidth, truncateToWidth, visibleWidth } from "../pi-tui/src/index.js";
-import { P, chalk } from "./palette.js";
+import { chalk, P } from "./palette.js";
 
 export function wrapAt(text: string, width: number): string[] {
   const words = text.split(" ");
@@ -11,7 +11,7 @@ export function wrapAt(text: string, width: number): string[] {
     if (current.length === 0) {
       current = word;
     } else if (current.length + 1 + word.length <= width) {
-      current += " " + word;
+      current += ` ${word}`;
     } else {
       lines.push(current);
       current = word;
@@ -22,12 +22,7 @@ export function wrapAt(text: string, width: number): string[] {
 }
 
 export function modePill(mode: Mode): string {
-  const cfg =
-    mode === "guided"
-      ? P.modeGuided
-      : mode === "standard"
-        ? P.modeStandard
-        : P.modeSocratic;
+  const cfg = mode === "guided" ? P.modeGuided : mode === "standard" ? P.modeStandard : P.modeSocratic;
   const label = ` ${mode.toUpperCase()} `;
   return chalk.bgHex(cfg.bg).hex(cfg.fg).bold(label);
 }
@@ -151,9 +146,7 @@ function formatADRCard(chunk: Extract<ResponseChunk, { kind: "adr" }>): string[]
     `${chalk.hex(P.textMuted)("context")}      ${adr.context}`,
     `${chalk.hex(P.textMuted)("decision")}     ${adr.decision}`,
     `${chalk.hex(P.textMuted)("consequences")} ${adr.consequences}`,
-    ...(adr.docLinks.length > 0
-      ? [`${chalk.hex(P.textMuted)("docs")}         ${adr.docLinks.join("  ")}`]
-      : []),
+    ...(adr.docLinks.length > 0 ? [`${chalk.hex(P.textMuted)("docs")}         ${adr.docLinks.join("  ")}`] : []),
   ];
 }
 
@@ -195,4 +188,4 @@ export function formatPrompt(mode: Mode): string {
   return chalk.hex(P.blue).bold("struggle") + chalk.hex(P.textMuted)(` [${mode}] › `);
 }
 
-export { P, chalk, BUBBLE_THEMES, visibleWidth };
+export { BUBBLE_THEMES, chalk, P, visibleWidth };

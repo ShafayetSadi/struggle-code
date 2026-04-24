@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { readFile as readFileFromFs, readdir } from "node:fs/promises";
+import { readdir, readFile as readFileFromFs } from "node:fs/promises";
 import { relative, resolve, sep } from "node:path";
 
 import type { AgentTool } from "@mariozechner/pi-agent-core";

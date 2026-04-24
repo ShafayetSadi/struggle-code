@@ -1,5 +1,5 @@
 import { Agent, type AgentEvent } from "@mariozechner/pi-agent-core";
-import { type KnownProvider, type ToolResultMessage, getModel } from "@mariozechner/pi-ai";
+import { getModel, type KnownProvider, type ToolResultMessage } from "@mariozechner/pi-ai";
 
 import { renderTrailMarkdown } from "../artifacts/trail.js";
 import { classifyIntentWithDeps } from "../gate/classifier.js";
@@ -7,11 +7,11 @@ import type { Session } from "../index.js";
 import { createLLMAdapter } from "../llm/adapter.js";
 import { resolveProviderApiKey } from "../llm/auth.js";
 import {
-  type ModeHistoryEntry,
-  type PendingModePlan,
   createInitialState,
   createTrailEntry,
+  type ModeHistoryEntry,
   now,
+  type PendingModePlan,
   touchState,
 } from "../session/state.js";
 import type { ADR, IO, Mode, ProviderConfig, ResponseChunk, TrailEntry } from "../types.js";
@@ -154,8 +154,8 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
   };
 
   const refreshAgentConfig = () => {
-    agent.setSystemPrompt(buildSystemPrompt(projectPath, state.mode, state.sharedFiles));
-    agent.setThinkingLevel(getThinkingLevel(state.mode));
+    agent.state.systemPrompt = buildSystemPrompt(projectPath, state.mode, state.sharedFiles);
+    agent.state.thinkingLevel = getThinkingLevel(state.mode);
     state.activeMilestone =
       state.mode === "standard"
         ? "Direct coding execution"
@@ -190,7 +190,7 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
     }
 
     llm = createLLMAdapter(config);
-    agent.setModel(getModel(config.provider as KnownProvider, config.model as never));
+    agent.state.model = getModel(config.provider as KnownProvider, config.model as never);
     pushTrail("mode_change", {
       provider: config.provider,
       model: config.model,

@@ -1,9 +1,8 @@
 import { createCodingAgentSession } from "./coding-agent/session.js";
-import { DEFAULT_CONFIGS, resolveProviderConfig } from "./config.js";
+import { resolveProviderConfig } from "./config.js";
 import { classifyIntentWithDeps } from "./gate/classifier.js";
-import { NoopIO } from "./io.js";
 import { createLLMAdapter } from "./llm/adapter.js";
-import type { ADR, IO, Intent, Mode, ProviderConfig, ResponseChunk, SessionState, TrailEntry } from "./types.js";
+import type { ADR, Intent, IO, Mode, ProviderConfig, ResponseChunk, SessionState, TrailEntry } from "./types.js";
 
 export interface Session {
   state: SessionState;
@@ -31,7 +30,7 @@ export async function startSession(projectPath: string, io: IO, config?: Provide
   return createCodingAgentSession(projectPath, io, providerConfig);
 }
 
-export { loadConfig, resolveProviderConfig, DEFAULT_CONFIGS } from "./config.js";
+export { DEFAULT_CONFIGS, loadConfig, resolveProviderConfig } from "./config.js";
 export { NoopIO } from "./io.js";
 export { createLLMAdapter } from "./llm/adapter.js";
 export * from "./types.js";
