@@ -1,4 +1,5 @@
 import { readFile as readFileFromFs } from "node:fs/promises";
+import { dirname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { IO } from "../types.js";
@@ -24,8 +25,18 @@ function bundledPromptPath(name: PromptName): string {
   return fileURLToPath(new URL(`./${name}`, import.meta.url));
 }
 
+function sourcePromptPath(name: PromptName): string {
+  const currentDir = dirname(fileURLToPath(import.meta.url));
+  if (currentDir.includes(`${sep}dist${sep}prompts`)) {
+    return resolve(currentDir, "../../src/prompts", name);
+  }
+  return resolve(currentDir, name);
+}
+
 export async function loadPrompt(name: PromptName, io?: IO, overridePath?: string): Promise<string> {
-  const candidatePaths = [overridePath, bundledPromptPath(name)].filter((value): value is string => Boolean(value));
+  const candidatePaths = Array.from(
+    new Set([overridePath, bundledPromptPath(name), sourcePromptPath(name)].filter((value): value is string => Boolean(value)))
+  );
 
   for (const candidatePath of candidatePaths) {
     if (io) {
@@ -49,5 +60,5 @@ export async function loadPrompt(name: PromptName, io?: IO, overridePath?: strin
     }
   }
 
-  throw new Error(`Unable to load prompt asset: ${name}`);
+  throw new Error(`Unable to load prompt asset: ${name} (checked: ${candidatePaths.join(", ")})`);
 }

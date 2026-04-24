@@ -7,7 +7,7 @@
   "types": "./dist/index.d.ts",
   "files": ["dist"],
   "scripts": {
-    "build": "tsc -p tsconfig.json && mkdir -p dist/prompts && cp src/prompts/*.md dist/prompts/",
+    "build": "tsc -p tsconfig.json && node -e \"const fs=require('node:fs'); fs.mkdirSync('dist/prompts',{recursive:true}); for (const file of fs.readdirSync('src/prompts')) { if (file.endsWith('.md')) fs.copyFileSync('src/prompts/' + file, 'dist/prompts/' + file); }\"",
     "dev": "tsc -p tsconfig.json --watch",
     "test": "vitest run"
   },
