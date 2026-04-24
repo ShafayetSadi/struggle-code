@@ -1,7 +1,16 @@
 import { join, resolve } from "node:path";
 import { type Interface, createInterface } from "node:readline/promises";
 
-import { CURSOR_MARKER, Input, Key, ProcessTerminal, TUI, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@mariozechner/pi-tui";
+import {
+  CURSOR_MARKER,
+  Input,
+  Key,
+  ProcessTerminal,
+  TUI,
+  truncateToWidth,
+  visibleWidth,
+  wrapTextWithAnsi,
+} from "@mariozechner/pi-tui";
 import chalk from "chalk";
 
 import {
@@ -55,10 +64,12 @@ function frameSection(title: string, lines: string[], width: number): string[] {
   const top = chalk.dim(`+${"-".repeat(innerWidth + 2)}+`);
   const label = ` ${title.toUpperCase()} `;
   const headerFill = Math.max(0, innerWidth - label.length);
-  const header = chalk.dim(`|`) + chalk.bold(label) + chalk.dim(`${"-".repeat(headerFill)}|`);
+  const header = chalk.dim("|") + chalk.bold(label) + chalk.dim(`${"-".repeat(headerFill)}|`);
   const body = (lines.length > 0 ? lines : [""]).flatMap((line) => {
     const wrapped = wrapTextWithAnsi(line, innerWidth);
-    return (wrapped.length > 0 ? wrapped : [""]).map((wrappedLine) => chalk.dim("| ") + padAnsi(wrappedLine, innerWidth) + chalk.dim(" |"));
+    return (wrapped.length > 0 ? wrapped : [""]).map(
+      (wrappedLine) => chalk.dim("| ") + padAnsi(wrappedLine, innerWidth) + chalk.dim(" |")
+    );
   });
   return [top, header, ...body, top];
 }
@@ -306,7 +317,9 @@ class ReplScreen {
   }
 
   append(kind: LogKind, ...lines: string[]): void {
-    const normalized = lines.flatMap((line) => line.split("\n")).filter((line, index, all) => line.length > 0 || index < all.length - 1);
+    const normalized = lines
+      .flatMap((line) => line.split("\n"))
+      .filter((line, index, all) => line.length > 0 || index < all.length - 1);
     this.entries.push({ kind, lines: normalized.length > 0 ? normalized : [""] });
   }
 
@@ -321,10 +334,12 @@ class ReplScreen {
   render(width: number): string[] {
     const safeWidth = Math.max(48, width);
     const lines: string[] = [];
-    const title = truncateToWidth(chalk.bold("Struggle AI") + " " + chalk.dim("Interactive CLI"), safeWidth - 16);
+    const title = truncateToWidth(`${chalk.bold("Struggle AI")} ${chalk.dim("Interactive CLI")}`, safeWidth - 16);
     const headerLine = padAnsi(title, Math.max(10, safeWidth - visibleWidth(modeBadge(this.mode)) - 1));
-    lines.push(chalk.bgHex("#0F172A").white(headerLine + " " + modeBadge(this.mode)));
-    lines.push(chalk.bgHex("#E2E8F0").hex("#0F172A")(padAnsi(` Session ready${this.busy ? " - responding" : ""}`, safeWidth)));
+    lines.push(chalk.bgHex("#0F172A").white(`${headerLine} ${modeBadge(this.mode)}`));
+    lines.push(
+      chalk.bgHex("#E2E8F0").hex("#0F172A")(padAnsi(` Session ready${this.busy ? " - responding" : ""}`, safeWidth))
+    );
     lines.push("");
 
     lines.push(
@@ -347,13 +362,21 @@ class ReplScreen {
               : chalk.gray.bold("SYSTEM");
       const style = toneByKind(entry.kind);
       const body = entry.lines.length > 0 ? entry.lines : [""];
-      return body.map((line, index) => {
-        const prefix = index === 0 ? `${role}  ` : "     ";
-        return style ? `${prefix}${style(line)}` : `${prefix}${line}`;
-      }).concat("");
+      return body
+        .map((line, index) => {
+          const prefix = index === 0 ? `${role}  ` : "     ";
+          return style ? `${prefix}${style(line)}` : `${prefix}${line}`;
+        })
+        .concat("");
     });
 
-    lines.push(...frameSection("Transcript", transcriptLines.length > 0 ? transcriptLines : [chalk.gray("No messages yet.")], safeWidth));
+    lines.push(
+      ...frameSection(
+        "Transcript",
+        transcriptLines.length > 0 ? transcriptLines : [chalk.gray("No messages yet.")],
+        safeWidth
+      )
+    );
     lines.push("");
 
     const composerWidth = Math.max(12, safeWidth - 4);
@@ -362,7 +385,12 @@ class ReplScreen {
     lines.push(
       ...frameSection(
         "Composer",
-        [chalk.gray(this.footer), "", promptLine, ...(inputLines.length > 0 ? inputLines : [this.focused ? CURSOR_MARKER : ""])],
+        [
+          chalk.gray(this.footer),
+          "",
+          promptLine,
+          ...(inputLines.length > 0 ? inputLines : [this.focused ? CURSOR_MARKER : ""]),
+        ],
         safeWidth
       )
     );

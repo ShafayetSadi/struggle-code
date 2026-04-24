@@ -8,32 +8,77 @@ export interface DesignQuestion {
   question: string;
 }
 
-export const DESIGN_QUESTIONS: DesignQuestion[] = [
-  {
-    category: "user_outcome",
-    question: "Who is the first user, and what outcome should they reach in the first working version?",
-  },
-  {
-    category: "workflow",
-    question: "What is the core workflow the user must complete from start to finish?",
-  },
-  {
+function normalizeTopicSignals(topic: string): string {
+  return topic.toLowerCase();
+}
+
+function looksLargeSurface(topic: string): boolean {
+  return /blog|website|dashboard|platform|service|api|portal|auth|multi|team|admin|reader|author/.test(
+    normalizeTopicSignals(topic)
+  );
+}
+
+function looksCliOrTool(topic: string): boolean {
+  return /cli|command|terminal|script|tool|generator|parser|formatter/.test(normalizeTopicSignals(topic));
+}
+
+export function buildFallbackDesignQuestions(topic: string): DesignQuestion[] {
+  const lower = normalizeTopicSignals(topic);
+  const questions: DesignQuestion[] = [
+    {
+      category: "user_outcome",
+      question: "Who is the first user, and what outcome should they reach in the first working version?",
+    },
+    {
+      category: "workflow",
+      question: looksCliOrTool(topic)
+        ? "What is the first command or terminal flow the user must complete from start to finish?"
+        : "What is the core workflow the user must complete from start to finish?",
+    },
+  ];
+
+  if (looksCliOrTool(topic)) {
+    questions.push(
+      {
+        category: "inputs_outputs",
+        question: "What inputs does the command take, and what output should it produce on the happy path?",
+      },
+      {
+        category: "state_persistence",
+        question: "Does this need saved state or config, or can the first version stay stateless?",
+      },
+      {
+        category: "runtime_distribution",
+        question: "Where will this run and how will users install or invoke it in the first release?",
+      }
+    );
+    return questions;
+  }
+
+  questions.push({
     category: "data_storage",
     question: "What data has to be stored, and what can stay ephemeral for the first milestone?",
-  },
-  {
-    category: "auth_collaboration",
-    question: "Do you need auth, roles, or collaboration in the first release, or can that wait?",
-  },
-  {
+  });
+
+  if (looksLargeSurface(topic) || /database|store|persist|login|role|permission/.test(lower)) {
+    questions.push({
+      category: "auth_collaboration",
+      question: "Do you need auth, roles, or collaboration in the first release, or can that wait?",
+    });
+  }
+
+  questions.push({
     category: "deployment_runtime",
     question: "Where will this run, and what runtime or deployment constraints matter right now?",
-  },
-];
+  });
 
-export function createGuidedState(topic: string): GuidedRuntimeState {
+  return questions;
+}
+
+export function createGuidedState(topic: string, questions: DesignQuestion[]): GuidedRuntimeState {
   return {
     topic,
+    questions,
     questionIndex: 0,
     answers: [],
     milestones: [],
@@ -43,11 +88,11 @@ export function createGuidedState(topic: string): GuidedRuntimeState {
 }
 
 export function getCurrentDesignQuestion(state: GuidedRuntimeState): DesignQuestion {
-  return DESIGN_QUESTIONS[Math.min(state.questionIndex, DESIGN_QUESTIONS.length - 1)] as DesignQuestion;
+  return state.questions[Math.min(state.questionIndex, state.questions.length - 1)] as DesignQuestion;
 }
 
 export function shouldFinishInterview(state: GuidedRuntimeState): boolean {
-  if (state.answers.length >= 5) {
+  if (state.answers.length >= state.questions.length) {
     return true;
   }
   if (state.answers.length < 3) {

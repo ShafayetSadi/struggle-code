@@ -1,6 +1,6 @@
 # @struggle-ai/core
 
-Core runtime for Struggle AI. This package owns intent classification, session orchestration, guided and socratic learning flows, ADR generation, and trail export.
+Core runtime for Struggle AI. It now wraps `@mariozechner/pi-agent-core` and exposes a project-scoped coding agent through the existing `startSession()` API.
 
 ## Requirements
 
@@ -84,10 +84,13 @@ class LocalIO implements IO {
 }
 
 const session = await startSession(process.cwd(), new LocalIO());
+const chunks = [];
 
-for await (const chunk of session.sendMessage("Help me build a blogging website with FastAPI")) {
-  console.log(chunk);
+for await (const chunk of session.sendMessage("Inspect package.json and tell me what package this is.")) {
+  chunks.push(chunk);
 }
+
+console.log(chunks);
 ```
 
 ## Session Model
@@ -97,39 +100,42 @@ for await (const chunk of session.sendMessage("Help me build a blogging website 
 - `state`: current session state
 - `sendMessage(message)`: async stream of `ResponseChunk`
 - `setMode(mode)`: switch between `guided`, `standard`, and `full-socratic`
-- `shareFile(path)`: attach a file path to the session state
+- `shareFile(path)`: prioritize a file in future prompts
 - `invokeStuck()`: emit a stuck-session intervention
-- `invokeHint(level)`: emit a hint at level `1`, `2`, or `3`
-- `exportTrail(outputPath, format)`: write a Markdown learning trail
+- `invokeHint(level)`: emit a coding hint at level `1`, `2`, or `3`
+- `exportTrail(outputPath, format)`: write a Markdown transcript trail
 - `getTrail()`: read accumulated trail entries
-- `getADRs()`: read generated ADRs
+- `getADRs()`: returns an empty array in the current coding-agent runtime
 
 ### Modes
 
-- `guided`: design interview, milestone code generation, comprehension checkpoints, ADRs
-- `standard`: one clarification, full code generation, digest checkpoint, ADR
-- `full-socratic`: sub-problem decomposition, question loop, explain-it-back checkpoint
+Modes now tune agent behavior instead of running separate learning state machines:
 
-### Intents
+- `guided`: more deliberate planning before edits
+- `standard`: balanced execution with minimal ceremony
+- `full-socratic`: deeper investigation and verification before stopping
 
-`classifyIntent()` returns one of:
+## Agent Tools
 
-- `quick_help`
-- `debug`
-- `project`
+The runtime exposes these project-scoped tools to the model:
+
+- `read_file`
+- `write_file`
+- `list_files`
+- `search_files`
+- `run_command`
+
+All file tools are restricted to the session project root. `run_command` also executes from the project root and blocks a small set of obviously destructive commands.
 
 ## Response Chunks
 
-`sendMessage()` yields structured chunks:
+`sendMessage()` yields structured chunks. In the current coding-agent runtime, most output is emitted as `text` chunks:
 
-- `text`
-- `code`
-- `adr`
-- `question`
-- `checkpoint`
-- `sub_problem`
+- tool activity summaries such as `[tool] read_file src/index.ts`
+- assistant responses after tool use
+- hint and stuck-session messages
 
-Consumers should switch on `chunk.kind` and render each variant explicitly.
+The legacy chunk variants still exist in the public type for compatibility, but the coding-agent runtime does not currently emit ADR, checkpoint, or sub-problem chunks.
 
 ## Trail Export
 
@@ -138,16 +144,15 @@ Consumers should switch on `chunk.kind` and render each variant explicitly.
 Exported trails include:
 
 - session metadata
-- chronological transcript
-- generated ADRs
-- a summary footer of concepts and mode usage
+- mode history
+- chronological transcript entries
 
 ## Prompt Assets
 
-Prompt files live in [`src/prompts`](./src/prompts) and are copied into `dist/prompts` during build. If you change prompt files, rebuild the package before testing consumers against the new output.
+Prompt files in [`src/prompts`](./src/prompts) are still used by the legacy helper modules such as `classifyIntent()` and `createLLMAdapter()`-based flows. The coding-agent session runtime itself uses a generated system prompt instead.
 
 ## Notes for Consumers
 
 - The package is currently marked `"private": true` in [`package.json`](./package.json), so it is not publish-ready yet.
-- The `IO` abstraction is required. Core does not write directly to disk except through the injected `io`.
-- The default provider choice comes from environment variables unless you pass an explicit `ProviderConfig`.
+- The `IO` abstraction is still required for filesystem writes and notifications.
+- `startSession()` is the stable entrypoint; the internal runtime is now `pi-agent-core` based.

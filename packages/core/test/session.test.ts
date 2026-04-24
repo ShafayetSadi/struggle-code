@@ -1,144 +1,258 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { AgentEvent } from "@mariozechner/pi-agent-core";
+
+vi.mock("@mariozechner/pi-ai", () => ({
+  getModel: vi.fn(() => ({
+    api: "anthropic-messages",
+    provider: "anthropic",
+    id: "fake-model",
+    name: "fake-model",
+    baseUrl: "https://example.com",
+    reasoning: true,
+    input: ["text"],
+    cost: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+    },
+    contextWindow: 200_000,
+    maxTokens: 8_000,
+  })),
+}));
+
+vi.mock("@mariozechner/pi-agent-core", () => {
+  class MockAgent {
+    static events: AgentEvent[] = [];
+    static instances: MockAgent[] = [];
+
+    listeners = new Set<(event: AgentEvent) => void>();
+    systemPrompt = "";
+    thinkingLevel = "medium";
+    tools: unknown[] = [];
+    messages: string[] = [];
+
+    constructor(options?: {
+      initialState?: {
+        systemPrompt?: string;
+        thinkingLevel?: string;
+        tools?: unknown[];
+      };
+    }) {
+      this.systemPrompt = options?.initialState?.systemPrompt ?? "";
+      this.thinkingLevel = options?.initialState?.thinkingLevel ?? "medium";
+      this.tools = options?.initialState?.tools ?? [];
+      MockAgent.instances.push(this);
+    }
+
+    subscribe(fn: (event: AgentEvent) => void) {
+      this.listeners.add(fn);
+      return () => {
+        this.listeners.delete(fn);
+      };
+    }
+
+    setSystemPrompt(value: string) {
+      this.systemPrompt = value;
+    }
+
+    setThinkingLevel(value: string) {
+      this.thinkingLevel = value;
+    }
+
+    async prompt(message: string) {
+      this.messages.push(message);
+      for (const event of MockAgent.events) {
+        for (const listener of this.listeners) {
+          listener(event);
+        }
+      }
+    }
+  }
+
+  return { Agent: MockAgent };
+});
 
 import { startSession } from "../src/index.js";
 import { MemoryIO, collectChunks } from "./test-helpers.js";
 
-describe("session engine", () => {
-  it("routes debug prompts without entering the project interview", async () => {
-    const io = new MemoryIO();
-    const session = await startSession("/tmp/project", io);
-    const chunks = await collectChunks(session.sendMessage("My useEffect runs twice in development"));
+const MockAgentClass = (await import("@mariozechner/pi-agent-core")).Agent as unknown as {
+  events: AgentEvent[];
+  instances: Array<{
+    systemPrompt: string;
+    thinkingLevel: string;
+    tools: Array<{ name: string }>;
+    messages: string[];
+  }>;
+};
 
-    expect(chunks[0]).toMatchObject({ kind: "text" });
-    expect(chunks[1]).toMatchObject({ kind: "question" });
-    expect(session.state.activeMilestone).toBe("Waiting for the next task");
+describe("coding agent session", () => {
+  beforeEach(() => {
+    MockAgentClass.events = [];
+    MockAgentClass.instances.length = 0;
   });
 
-  it("completes the guided interview, writes a design brief, and emits a checkpoint", async () => {
-    const io = new MemoryIO();
-    const session = await startSession("/tmp/project", io);
-
-    await collectChunks(session.sendMessage("Help me build a blogging website with FastAPI"));
-    await collectChunks(
-      session.sendMessage("The first user is an author who needs to publish and edit blog posts quickly.")
-    );
-    await collectChunks(session.sendMessage("They create a draft, preview it, and publish from a simple dashboard."));
-    const thirdTurn = await collectChunks(
-      session.sendMessage(
-        "We only need posts and tags in storage, auth can stay email-only, and deployment is a single FastAPI service on a small cloud VM."
-      )
-    );
-
-    expect([...io.writes.keys()].some((path) => path.includes("design-brief-"))).toBe(true);
-    expect(thirdTurn.some((chunk) => chunk.kind === "checkpoint")).toBe(true);
-    expect(thirdTurn.some((chunk) => chunk.kind === "code")).toBe(true);
-    expect(session.state.activeMilestone).toBe("Define the first user-facing slice");
-  });
-
-  it("does not treat a short meta question as a guided interview answer", async () => {
-    const io = new MemoryIO();
-    const session = await startSession("/tmp/project", io);
-
-    await collectChunks(session.sendMessage("Help me build a blogging website with FastAPI"));
-    await collectChunks(session.sendMessage("An author publishes posts for readers."));
-    const metaTurn = await collectChunks(session.sendMessage("what is this bug"));
-
-    expect(metaTurn).toEqual([
+  it("streams tool activity and the final assistant response as text chunks", async () => {
+    MockAgentClass.events = [
       {
-        kind: "text",
-        value:
-          "You are still in the scoping interview. Answer the current design question in one or two concrete sentences so I can keep the plan coherent.\n",
+        type: "tool_execution_start",
+        toolCallId: "1",
+        toolName: "read_file",
+        args: { path: "src/index.ts" },
       },
       {
-        kind: "question",
-        text: "What is the core workflow the user must complete from start to finish?",
-        awaitsInput: true,
+        type: "tool_execution_end",
+        toolCallId: "1",
+        toolName: "read_file",
+        result: { ok: true },
+        isError: false,
       },
+      {
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "Implemented the change." }],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+      },
+      {
+        type: "turn_end",
+        message: {
+          role: "assistant",
+          content: [],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+        toolResults: [
+          {
+            role: "toolResult",
+            toolCallId: "1",
+            toolName: "read_file",
+            content: [{ type: "text", text: "..." }],
+            isError: false,
+            timestamp: Date.now(),
+          },
+        ],
+      },
+    ];
+
+    const io = new MemoryIO();
+    const session = await startSession("/tmp/project", io);
+    const chunks = await collectChunks(session.sendMessage("Inspect src/index.ts and implement the fix"));
+
+    expect(chunks).toEqual([
+      { kind: "text", value: "[tool] read_file src/index.ts\n" },
+      { kind: "text", value: "[tool] read_file completed\n" },
+      { kind: "text", value: "Implemented the change.\n" },
     ]);
-    expect(session.state.activeMilestone).toBe("Design interview");
-    expect(session.state.activeSubProblem).toBe("Design question 2 of 5");
+    expect(session.state.activeMilestone).toBe("Coding agent (guided)");
+    expect(session.state.activeSubProblem).toBe("Ready for the next coding task");
+    expect(session.getTrail().some((entry) => entry.type === "bypass")).toBe(true);
   });
 
-  it("generates an ADR after a guided checkpoint passes", async () => {
+  it("updates the agent prompt when mode or shared files change", async () => {
     const io = new MemoryIO();
     const session = await startSession("/tmp/project", io);
+    const agent = MockAgentClass.instances[0];
 
-    await collectChunks(session.sendMessage("Help me build a blogging website with FastAPI"));
-    await collectChunks(session.sendMessage("An author publishes posts for readers."));
-    await collectChunks(session.sendMessage("They create, preview, and publish posts."));
-    await collectChunks(
-      session.sendMessage(
-        "Posts and tags persist in a database, auth is simple, and deployment is a single FastAPI container with one database."
-      )
-    );
-    const checkpointTurn = await collectChunks(
-      session.sendMessage(
-        "This milestone defines the first publishing flow because the user needs one clear path, the request and response boundary stays simple, and the test should cover draft to published state."
-      )
-    );
-
-    expect(checkpointTurn.some((chunk) => chunk.kind === "adr")).toBe(true);
-    expect(session.getADRs()).toHaveLength(1);
-  });
-
-  it("supports standard mode clarification and digest flow", async () => {
-    const io = new MemoryIO();
-    const session = await startSession("/tmp/project", io);
-    session.setMode("standard");
-
-    const firstTurn = await collectChunks(session.sendMessage("Build auth"));
-    expect(firstTurn).toEqual([
-      {
-        kind: "question",
-        text: "Give me one sentence on the exact first user outcome so I can generate the first-pass implementation.",
-        awaitsInput: true,
-      },
+    expect(agent.tools.map((tool) => tool.name).sort()).toEqual([
+      "list_files",
+      "read_file",
+      "run_command",
+      "search_files",
+      "write_file",
     ]);
-
-    const secondTurn = await collectChunks(
-      session.sendMessage("A user should be able to sign in and reach a protected dashboard.")
+    expect(agent.systemPrompt).toContain(
+      "Use `guided` when you want the agent to behave like a careful senior engineer"
     );
-    expect(secondTurn.some((chunk) => chunk.kind === "checkpoint")).toBe(true);
 
-    const thirdTurn = await collectChunks(
-      session.sendMessage(
-        "The generated code should carry the sign-in outcome through a narrow auth boundary so the dashboard only renders after verification succeeds."
-      )
-    );
-    expect(thirdTurn.some((chunk) => chunk.kind === "adr")).toBe(true);
-  });
-
-  it("supports full socratic decomposition and explain-it-back", async () => {
-    const io = new MemoryIO();
-    const session = await startSession("/tmp/project", io);
     session.setMode("full-socratic");
+    expect(agent.thinkingLevel).toBe("high");
+    expect(agent.systemPrompt).toContain("Current mode: full-socratic.");
+    expect(agent.systemPrompt).toContain("Decompose the problem internally before editing.");
 
-    const firstTurn = await collectChunks(session.sendMessage("Help me build JWT auth"));
-    expect(firstTurn.some((chunk) => chunk.kind === "sub_problem")).toBe(true);
-
-    await collectChunks(session.sendMessage("The goal is a sign-in flow with a stable success metric."));
-    await collectChunks(session.sendMessage("We prove it with a protected route and one failing test before auth."));
-    await collectChunks(session.sendMessage("The auth service owns token issuance and verification."));
-    await collectChunks(session.sendMessage("Out of scope is team management for now."));
-    await collectChunks(session.sendMessage("A regression test should fail if token verification breaks."));
-    const finalTurn = await collectChunks(
-      session.sendMessage("The main risk is accepting an invalid token without surfacing the boundary failure.")
-    );
-
-    expect(finalTurn.some((chunk) => chunk.kind === "checkpoint" && chunk.kind2 === "explain_it_back")).toBe(true);
+    await session.shareFile("/tmp/project/src/app.ts");
+    expect(agent.systemPrompt).toContain("/tmp/project/src/app.ts");
   });
 
-  it("exports a readable markdown trail and warns for pdf requests", async () => {
+  it("exports a markdown trail and warns when pdf is requested", async () => {
+    MockAgentClass.events = [
+      {
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "Checked the files and I am ready." }],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+      },
+      {
+        type: "turn_end",
+        message: {
+          role: "assistant",
+          content: [],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+        toolResults: [],
+      },
+    ];
+
     const io = new MemoryIO();
     const session = await startSession("/tmp/project", io);
 
-    await collectChunks(session.sendMessage("What is a Promise?"));
+    await collectChunks(session.sendMessage("Check the repo"));
     await session.exportTrail("/tmp/trail.md", "pdf");
 
     const markdown = io.writes.get("/tmp/trail.md");
     expect(markdown).toContain("# Struggle AI Learning Trail");
     expect(markdown).toContain("## Transcript");
     expect(io.notifications.some((item) => item.level === "warn")).toBe(true);
-    expect(session.getTrail().some((entry) => entry.type === "session_end")).toBe(true);
   });
 });

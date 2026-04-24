@@ -1,3 +1,7 @@
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { DEFAULT_CONFIGS } from "../src/config.js";
@@ -28,25 +32,20 @@ describeIf("adapter integration", () => {
     expect(streamed.toLowerCase()).toContain("stream-ok");
   });
 
-  it("runs one guided happy path end-to-end", async () => {
+  it("uses the coding-agent runtime to inspect a real project file", async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), "struggle-live-"));
+    await writeFile(join(projectPath, "package.json"), '{ "name": "integration-demo" }\n', "utf8");
+
     const io = new MemoryIO();
-    const session = await startSession("/tmp/project", io, DEFAULT_CONFIGS.anthropic);
-
-    await collectChunks(session.sendMessage("Help me build a blogging website with FastAPI"));
-    await collectChunks(session.sendMessage("The first user is an author who publishes posts."));
-    await collectChunks(session.sendMessage("They draft, preview, and publish from one dashboard."));
-    await collectChunks(
-      session.sendMessage(
-        "Posts and tags persist in a database, auth is simple, and deployment is one FastAPI service on a cloud VM."
-      )
-    );
-    const finalTurn = await collectChunks(
-      session.sendMessage(
-        "The first milestone matters because it captures the publishing flow, keeps the request boundary narrow, and gives us a testable draft-to-publish path."
-      )
+    const session = await startSession(projectPath, io, DEFAULT_CONFIGS.anthropic);
+    const turn = await collectChunks(
+      session.sendMessage("Read package.json in the project root and tell me the package name only.")
     );
 
-    expect(finalTurn.some((chunk) => chunk.kind === "adr")).toBe(true);
-    expect(session.getADRs().length).toBeGreaterThan(0);
+    const combined = turn
+      .filter((chunk) => chunk.kind === "text")
+      .map((chunk) => chunk.value)
+      .join("");
+    expect(combined.toLowerCase()).toContain("integration-demo");
   });
 });

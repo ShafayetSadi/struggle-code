@@ -5,9 +5,7 @@
       "name": "Run Extension",
       "type": "extensionHost",
       "request": "launch",
-      "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}/packages/vscode"
-      ],
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}/packages/vscode"],
       "outFiles": ["${workspaceFolder}/packages/vscode/dist/**/*.js"],
       "preLaunchTask": "build-vscode-extension",
       "sourceMaps": true
@@ -16,9 +14,7 @@
       "name": "Run Extension (no rebuild)",
       "type": "extensionHost",
       "request": "launch",
-      "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}/packages/vscode"
-      ],
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}/packages/vscode"],
       "outFiles": ["${workspaceFolder}/packages/vscode/dist/**/*.js"],
       "sourceMaps": true
     }
