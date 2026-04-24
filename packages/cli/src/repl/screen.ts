@@ -19,6 +19,7 @@ export class ReplScreen {
   private busy = false;
   private commandSelection = 0;
   private transcriptScroll = 0;
+  private maxTranscriptScroll = 0;
   private readonly onSubmitInput: (value: string) => void;
 
   private thinking = false;
@@ -147,22 +148,37 @@ export class ReplScreen {
         return;
       }
     }
+
+    // PageUp → scroll toward older messages
     if (data === Key.pageUp || data === "\x1b[5~") {
-      this.transcriptScroll += 8;
+      this.transcriptScroll = Math.min(this.transcriptScroll + 8, this.maxTranscriptScroll);
       return;
     }
+    // PageDown → scroll toward newer messages
     if (data === Key.pageDown || data === "\x1b[6~") {
       this.transcriptScroll = Math.max(0, this.transcriptScroll - 8);
       return;
     }
+    // Home → jump to oldest messages
     if (data === Key.home) {
-      this.transcriptScroll = Number.MAX_SAFE_INTEGER;
+      this.transcriptScroll = this.maxTranscriptScroll;
       return;
     }
+    // End → jump to newest messages
     if (data === Key.end) {
       this.transcriptScroll = 0;
       return;
     }
+    // Arrow up/down scroll line-by-line when no command menu is open
+    if (data === Key.up || data === "\x1b[A") {
+      this.transcriptScroll = Math.min(this.transcriptScroll + 1, this.maxTranscriptScroll);
+      return;
+    }
+    if (data === Key.down || data === "\x1b[B") {
+      this.transcriptScroll = Math.max(0, this.transcriptScroll - 1);
+      return;
+    }
+
     this.input.handleInput(data);
     const next = this.getCommandMatches();
     this.commandSelection = next.length > 0 ? Math.min(this.commandSelection, next.length - 1) : 0;
@@ -174,9 +190,12 @@ export class ReplScreen {
 
   render(width: number): string[] {
     const w = Math.max(60, width);
-    const termHeight = Math.max(18, process.stdout.rows ?? 24);
+    // Use process.stdout.rows directly — this is the real terminal height the
+    // renderer must fill completely so there is no blank space below the UI.
+    const termHeight = process.stdout.rows ?? 24;
     const lines: string[] = [];
 
+    // ── Header (3 lines) ────────────────────────────────────────────────────
     const pill = modePill(this.mode);
     const pillWidth = visibleWidth(pill);
     const statusLeft = chalk.hex(P.textPrimary).bold("  Struggle AI");
@@ -191,14 +210,39 @@ export class ReplScreen {
     lines.push(chalk.bgHex(P.bg)(padToWidth(truncateToWidth(ctxLabel + ctxValue, w), w)));
 
     lines.push(chalk.bgHex(P.bg)(chalk.hex(P.borderSubtle)("─".repeat(w))));
+    // header = 3 lines total
 
+    // ── Measure everything below the transcript so we can give the rest to it
     const inputLines = this.input.render(w - 4);
     const inputHeight = Math.max(1, inputLines.length);
-    const maxHints = 4;
-    const dockHeight = 5 + inputHeight + (this.busy ? 1 : 0) + maxHints;
-    const thinkingHeight = this.thinking ? 3 : 0;
-    const transcriptViewport = Math.max(4, termHeight - 3 - dockHeight - thinkingHeight);
 
+    // Lines consumed below the transcript (counted precisely):
+    //   thinking frame  : 3 lines (conditional)
+    //   busy indicator  : 1 line  (conditional, never overlaps thinking)
+    //   hint divider    : 1 line  (conditional on hints existing)
+    //   hint rows       : 0-4     (conditional)
+    //   input separator : 1
+    //   input rows      : inputHeight
+    //   footer sep      : 1
+    //   info bar        : 1
+    const hintMatches = this.getCommandMatches().slice(0, 4);
+    const hintHeight = hintMatches.length > 0 ? hintMatches.length + 1 : 0;
+    const thinkingHeight = this.thinking ? 3 : 0;
+    const busyHeight = this.busy && !this.thinking ? 1 : 0;
+
+    const belowTranscript =
+      thinkingHeight +
+      busyHeight +
+      hintHeight +
+      1 +           // input separator (─)
+      inputHeight +
+      1 +           // footer separator (─)
+      1;            // info bar
+
+    // Header = 3 lines. Transcript fills everything in between.
+    const transcriptViewport = Math.max(4, termHeight - 3 - belowTranscript);
+
+    // ── Build full transcript line buffer ────────────────────────────────────
     const transcriptLines: string[] = [];
     this.entries.forEach((entry, entryIndex) => {
       const isLastEntry = entryIndex === this.entries.length - 1;
@@ -232,23 +276,47 @@ export class ReplScreen {
       transcriptLines.push(chalk.bgHex(theme.bg)(padToWidth("", w)));
     });
 
+    // ── Render transcript + scrollbar ────────────────────────────────────────
     if (transcriptLines.length > 0) {
-      const maxTranscriptScroll = Math.max(0, transcriptLines.length - transcriptViewport);
-      this.transcriptScroll = Math.min(this.transcriptScroll, maxTranscriptScroll);
+      this.maxTranscriptScroll = Math.max(0, transcriptLines.length - transcriptViewport);
+      this.transcriptScroll = Math.min(this.transcriptScroll, this.maxTranscriptScroll);
+
       const transcriptStart = Math.max(0, transcriptLines.length - transcriptViewport - this.transcriptScroll);
-      lines.push(...transcriptLines.slice(transcriptStart, transcriptStart + transcriptViewport));
+      const visibleSlice = transcriptLines.slice(transcriptStart, transcriptStart + transcriptViewport);
+
+      const totalLines = transcriptLines.length;
+      const needsScrollbar = totalLines > transcriptViewport;
+      const thumbSize = needsScrollbar
+        ? Math.max(1, Math.floor((transcriptViewport / totalLines) * transcriptViewport))
+        : transcriptViewport;
+      const scrollableRange = transcriptViewport - thumbSize;
+      const scrollRatio = this.maxTranscriptScroll > 0
+        ? this.transcriptScroll / this.maxTranscriptScroll
+        : 0;
+      const thumbOffset = needsScrollbar
+        ? Math.round((1 - scrollRatio) * scrollableRange)
+        : 0;
+
+      // Pad viewport to exact height so blank lines also get a scrollbar glyph
+      for (let i = 0; i < transcriptViewport; i++) {
+        const isThumb = needsScrollbar && i >= thumbOffset && i < thumbOffset + thumbSize;
+        const bar = isThumb
+          ? chalk.hex(P.textMuted)("▐")
+          : chalk.hex(P.borderSubtle)("╎");
+        const trimmed = truncateToWidth(visibleSlice[i] ?? "", w - 1);
+        lines.push(chalk.bgHex(P.bg)(padToWidth(trimmed, w - 1)) + chalk.bgHex(P.bg)(bar));
+      }
     } else if (!this.thinking) {
+      // Empty state — fill viewport so input lands at the bottom
       const emptyMsg = chalk.hex(P.textMuted)("no messages yet  ·  type below or /help");
-      lines.push(
-        chalk.bgHex(P.bg)(
-          padToWidth(" ".repeat(Math.max(0, Math.floor((w - visibleWidth(emptyMsg)) / 2))) + emptyMsg, w)
-        )
-      );
+      const centered = " ".repeat(Math.max(0, Math.floor((w - visibleWidth(emptyMsg)) / 2))) + emptyMsg;
+      lines.push(chalk.bgHex(P.bg)(padToWidth(centered, w)));
       for (let i = 1; i < transcriptViewport; i++) {
         lines.push(chalk.bgHex(P.bg)(padToWidth("", w)));
       }
     }
 
+    // ── Thinking / busy indicators ───────────────────────────────────────────
     if (this.thinking) {
       lines.push(...renderThinkingFrame(this.thinkingTick, w));
     }
@@ -258,9 +326,11 @@ export class ReplScreen {
       lines.push(chalk.bgHex(P.bg)(padToWidth(truncateToWidth(working, w), w)));
     }
 
+    // ── Command hints ────────────────────────────────────────────────────────
     const hints = this.renderCommandHints(w);
     lines.push(...hints);
 
+    // ── Input (pinned to bottom) ─────────────────────────────────────────────
     lines.push(chalk.bgHex(P.bg)(chalk.hex(P.borderMedium)("─".repeat(w))));
 
     const promptStr = chalk.hex(P.blue)("  › ");
@@ -274,6 +344,7 @@ export class ReplScreen {
       lines.push(chalk.bgHex(P.bg)(padToWidth(truncateToWidth(prefix + line, w), w)));
     });
 
+    // ── Footer info bar ──────────────────────────────────────────────────────
     lines.push(chalk.bgHex(P.bg)(chalk.hex(P.borderMedium)("─".repeat(w))));
 
     const leftInfo = chalk.hex(P.textMuted)(`  ~/${this.projectLabel}`);
