@@ -370,17 +370,59 @@ function fallbackQuestionKeywords(phase: ImplementationPhase): string[] {
   return Array.from(new Set([...titleWords, ...fileWords])).slice(0, 4);
 }
 
-export function buildValidationQuestions(plan: ImplementationPlan): ValidationQuestion[] {
-  return plan.phases.slice(0, 3).map((phase, index) => ({
-    id: `validation-${index + 1}`,
-    prompt:
-      index === 0
-        ? `Before we code, explain how "${phase.title}" changes the project and which file or module carries that work.`
-        : index === 1
-          ? `Why does "${phase.title}" need the files it touches, and what responsibility does each one own?`
-          : `What would you verify after "${phase.title}" to prove the implementation still works?`,
-    expectedKeywords: fallbackQuestionKeywords(phase),
-  }));
+export function buildValidationQuestions(plan: ImplementationPlan, phaseIndex: number): ValidationQuestion[] {
+  const phase = plan.phases[phaseIndex];
+  if (!phase) {
+    return [];
+  }
+
+  const [primaryFile, secondaryFile] = phase.files;
+  const phaseKeywords = fallbackQuestionKeywords(phase);
+
+  return [
+    {
+      id: `validation-${phaseIndex + 1}-1`,
+      prompt: `In your own words, what is phase ${phaseIndex + 1}, "${phase.title}," trying to achieve?`,
+      expectedKeywords: Array.from(new Set([phase.title.toLowerCase(), ...phaseKeywords])).slice(0, 5),
+    },
+    {
+      id: `validation-${phaseIndex + 1}-2`,
+      prompt: "Which file or module should change first in this phase, and what responsibility does it own?",
+      expectedKeywords: Array.from(
+        new Set([
+          ...(primaryFile
+            ? basename(primaryFile.path)
+                .toLowerCase()
+                .split(/[^a-z0-9]+/)
+                .filter((word) => word.length >= 3)
+            : []),
+          ...(secondaryFile
+            ? basename(secondaryFile.path)
+                .toLowerCase()
+                .split(/[^a-z0-9]+/)
+                .filter((word) => word.length >= 3)
+            : []),
+          ...phaseKeywords,
+        ])
+      ).slice(0, 5),
+    },
+    {
+      id: `validation-${phaseIndex + 1}-3`,
+      prompt: "What would you verify after this phase to prove it works and does not regress?",
+      expectedKeywords: Array.from(
+        new Set(
+          phase.verification
+            .flatMap((item) =>
+              item
+                .toLowerCase()
+                .split(/[^a-z0-9]+/)
+                .filter((word) => word.length >= 4)
+            )
+            .concat(["verify", "test", "check"])
+        )
+      ).slice(0, 5),
+    },
+  ];
 }
 
 export function formatPlanForUser(plan: ImplementationPlan, mode: "guided" | "full-socratic"): string {
@@ -479,22 +521,60 @@ export function formatValidationPrompt(questions: ValidationQuestion[]): string 
   return `${lines.join("\n")}\n`;
 }
 
+export function formatPhaseValidationPrompt(
+  plan: ImplementationPlan,
+  phaseIndex: number,
+  questions: ValidationQuestion[]
+): string {
+  const phase = plan.phases[phaseIndex];
+  const lines = [
+    `Before I execute phase ${phaseIndex + 1}${phase ? `, "${phase.title},"` : ""} answer these in your own words:`,
+    ...questions.map((question, index) => `${index + 1}. ${question.prompt}`),
+  ];
+  return `${lines.join("\n")}\n`;
+}
+
+export function formatExecutionApprovalPrompt(
+  plan: ImplementationPlan,
+  phaseIndex: number,
+  mode: "guided" | "full-socratic"
+): string {
+  const phase = plan.phases[phaseIndex];
+  return [
+    `${
+      mode === "guided" ? "If that plan looks right" : "You passed the quiz for this phase"
+    }, should I execute phase ${phaseIndex + 1}${phase ? `, "${phase.title},"` : ""} now?`,
+    'Reply with something like "yes", "ok", or "go ahead", or ask a follow-up question first.',
+  ].join("\n");
+}
+
 export async function evaluateValidationAnswer(
   llm: LLMAdapter,
   plan: ImplementationPlan,
+  phaseIndex: number,
   questions: ValidationQuestion[],
   answer: string
 ): Promise<BuildValidationResult> {
+  const normalizedAnswer = answer.toLowerCase();
   const keywordHits = questions.filter((question) =>
-    question.expectedKeywords.some((keyword) => answer.toLowerCase().includes(keyword.toLowerCase()))
+    question.expectedKeywords.some((keyword) => normalizedAnswer.includes(keyword.toLowerCase()))
   ).length;
   const heuristicPassed = keywordHits >= Math.max(1, Math.ceil(questions.length * 0.6));
+  const phaseTitle = plan.phases[phaseIndex]?.title ?? "this phase";
+  const missedQuestion = questions.find(
+    (question) => !question.expectedKeywords.some((keyword) => normalizedAnswer.includes(keyword.toLowerCase()))
+  );
+  const targetedFollowUp = missedQuestion ??
+    questions[0] ?? {
+      prompt: `Explain ${phaseTitle} again with the file boundary and verification path.`,
+      expectedKeywords: [],
+    };
 
   const fallback = heuristicPassed
     ? '{"passed":true}'
     : JSON.stringify({
         passed: false,
-        followUp: `Tighten the explanation around ${plan.phases[0]?.title ?? "the first phase"} and name the file boundary you would touch first.`,
+        followUp: `Tighten the explanation for ${phaseTitle}. ${targetedFollowUp.prompt}`,
       });
 
   const raw = await safeComplete(
@@ -512,6 +592,7 @@ export async function evaluateValidationAnswer(
         role: "user",
         content: JSON.stringify({
           plan,
+          phaseIndex,
           questions,
           answer,
         }),

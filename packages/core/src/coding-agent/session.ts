@@ -15,19 +15,25 @@ import {
 } from "../session/state.js";
 import type { ADR, IO, Mode, ProviderConfig, ResponseChunk, TrailEntry } from "../types.js";
 import {
-  buildExecutionPrompt,
   buildImplementationPlan,
   buildPhaseExecutionPrompt,
   buildValidationQuestions,
   evaluateValidationAnswer,
+  formatExecutionApprovalPrompt,
   formatGuidedApprovalPrompt,
   formatPhaseForUser,
+  formatPhaseValidationPrompt,
   formatPlanForUser,
-  formatValidationPrompt,
   looksLikeApproval,
 } from "./mode-runtime.js";
 import { buildSystemPrompt } from "./prompt.js";
-import { createProjectTools } from "./tools.js";
+import { createProjectTools, resolveProjectPath } from "./tools.js";
+
+interface PhaseExecutionResult {
+  hadToolError: boolean;
+  runCommandCount: number;
+  wroteFiles: Set<string>;
+}
 
 function getThinkingLevel(mode: Mode): "medium" | "high" {
   return mode === "standard" ? "medium" : "high";
@@ -199,11 +205,107 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
     return pendingPlan.plan.phases[pendingPlan.currentPhaseIndex];
   };
 
-  const runAgentTurn = async (message: string, push: (chunk: ResponseChunk) => void) => {
+  const normalizePlannedPath = (path: string): string | undefined => {
+    try {
+      return resolveProjectPath(projectPath, path);
+    } catch {
+      return undefined;
+    }
+  };
+
+  const validatePhaseExecution = async (result: PhaseExecutionResult) => {
+    const currentPhase = getPendingPhase();
+    if (!currentPhase) {
+      return {
+        passed: false,
+        reason: "There is no active phase to validate.",
+      };
+    }
+
+    const expectedPaths = currentPhase.files.map((file) => ({
+      file,
+      absolutePath: normalizePlannedPath(file.path),
+    }));
+    const touchedExpectedFiles = expectedPaths.filter(
+      (item) => item.absolutePath && result.wroteFiles.has(item.absolutePath)
+    );
+    const createdFiles = await Promise.all(
+      expectedPaths
+        .filter((item) => item.file.action === "create" && item.absolutePath)
+        .map(async (item) => ({
+          path: item.file.path,
+          exists: await io.fileExists(item.absolutePath as string),
+        }))
+    );
+    const missingCreatedFiles = createdFiles.filter((item) => !item.exists).map((item) => item.path);
+    const hadConcreteExecution = result.wroteFiles.size > 0 || result.runCommandCount > 0;
+
+    if (result.hadToolError) {
+      return {
+        passed: false,
+        reason: "A tool failed during phase execution, so I cannot treat the phase as complete yet.",
+      };
+    }
+
+    if (!hadConcreteExecution) {
+      return {
+        passed: false,
+        reason:
+          "I did not observe any file writes or verification commands for this phase, so nothing concrete was executed.",
+      };
+    }
+
+    if (currentPhase.files.length > 0 && touchedExpectedFiles.length === 0 && missingCreatedFiles.length > 0) {
+      return {
+        passed: false,
+        reason: `I did not see the expected phase files land yet. Missing created files: ${missingCreatedFiles.join(", ")}.`,
+      };
+    }
+
+    return {
+      passed: true,
+      touchedFiles: touchedExpectedFiles.map((item) => item.file.path),
+    };
+  };
+
+  const setReadyStateForMode = () => {
+    setModePhase("idle");
+    updateActiveStep(
+      state.mode === "standard"
+        ? "Ready for the next coding task"
+        : state.mode === "guided"
+          ? "Ready to explain the next build step"
+          : "Ready for the next validated build step"
+    );
+  };
+
+  const runAgentTurn = async (message: string, push: (chunk: ResponseChunk) => void): Promise<PhaseExecutionResult> => {
     setModePhase("executing");
     updateActiveStep("Working on the current request");
+    const result: PhaseExecutionResult = {
+      hadToolError: false,
+      runCommandCount: 0,
+      wroteFiles: new Set<string>(),
+    };
 
     const unsubscribe = agent.subscribe((event) => {
+      if (event.type === "tool_execution_start") {
+        if (event.toolName === "write_file" && typeof event.args?.path === "string") {
+          try {
+            result.wroteFiles.add(resolveProjectPath(projectPath, event.args.path));
+          } catch {
+            // Ignore writes outside the project root; the tool itself should reject them.
+          }
+        }
+        if (event.toolName === "run_command") {
+          result.runCommandCount += 1;
+        }
+      }
+
+      if (event.type === "tool_execution_end" && event.isError) {
+        result.hadToolError = true;
+      }
+
       const summary = summarizeToolEvent(event);
       if (summary) {
         const toolChunk: ResponseChunk = { kind: "text", value: `${summary}\n` };
@@ -241,15 +343,10 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
     } finally {
       unsubscribe();
       touchState(state);
-      setModePhase("idle");
-      updateActiveStep(
-        state.mode === "standard"
-          ? "Ready for the next coding task"
-          : state.mode === "guided"
-            ? "Ready to explain the next build step"
-            : "Ready for the next validated build step"
-      );
+      setReadyStateForMode();
     }
+
+    return result;
   };
 
   pushTrail("session_start", {
@@ -272,8 +369,7 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
           if (!currentPhase) {
             pushTextChunk(push, "Guided mode has no remaining phases for this request.\n");
             resetPendingPlan();
-            setModePhase("idle");
-            updateActiveStep("Ready to explain the next build step");
+            setReadyStateForMode();
             return;
           }
 
@@ -289,18 +385,30 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
             push,
             `Executing phase ${pendingPlan.currentPhaseIndex + 1} of ${pendingPlan.plan.phases.length}: ${currentPhase.title}.\n`
           );
-          await runAgentTurn(
+          const executionResult = await runAgentTurn(
             buildPhaseExecutionPrompt(pendingPlan.request, pendingPlan.plan, pendingPlan.currentPhaseIndex, "guided"),
             push
           );
+          const validation = await validatePhaseExecution(executionResult);
+          if (!validation.passed) {
+            setModePhase("awaiting-approval");
+            updateActiveStep(`Waiting for approval to retry phase ${pendingPlan.currentPhaseIndex + 1}`);
+            pushTextChunk(push, `${validation.reason}\n`);
+            pushTextChunk(
+              push,
+              "I am keeping you on the same guided phase because the repo does not show enough execution evidence yet.\n"
+            );
+            pushTextChunk(push, formatPhaseForUser(pendingPlan.plan, pendingPlan.currentPhaseIndex, "guided"));
+            pushTextChunk(push, `${formatGuidedApprovalPrompt(pendingPlan.plan, pendingPlan.currentPhaseIndex)}\n`);
+            return;
+          }
 
           pendingPlan.currentPhaseIndex += 1;
           if (pendingPlan.currentPhaseIndex >= pendingPlan.plan.phases.length) {
             pushTrail("milestone_complete", { mode: "guided", goal: pendingPlan.plan.goal });
             pushTextChunk(push, "Guided mode finished every planned phase for this request.\n");
             resetPendingPlan();
-            setModePhase("idle");
-            updateActiveStep("Ready to explain the next build step");
+            setReadyStateForMode();
             return;
           }
 
@@ -313,6 +421,93 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
         }
 
         if (state.mode === "full-socratic" && pendingPlan?.mode === "full-socratic") {
+          const currentPhase = getPendingPhase();
+          if (!currentPhase) {
+            pushTextChunk(push, "Full-socratic mode has no remaining phases for this request.\n");
+            resetPendingPlan();
+            setReadyStateForMode();
+            return;
+          }
+
+          if (pendingPlan.validationPassed) {
+            if (!looksLikeApproval(message)) {
+              setModePhase("awaiting-approval");
+              updateActiveStep(`Waiting for approval to execute phase ${pendingPlan.currentPhaseIndex + 1}`);
+              pushTextChunk(push, formatPhaseForUser(pendingPlan.plan, pendingPlan.currentPhaseIndex, "full-socratic"));
+              pushTextChunk(
+                push,
+                `${formatExecutionApprovalPrompt(pendingPlan.plan, pendingPlan.currentPhaseIndex, "full-socratic")}\n`
+              );
+              return;
+            }
+
+            pushTextChunk(
+              push,
+              `Executing phase ${pendingPlan.currentPhaseIndex + 1} of ${pendingPlan.plan.phases.length}: ${currentPhase.title}.\n`
+            );
+            const executionResult = await runAgentTurn(
+              buildPhaseExecutionPrompt(
+                pendingPlan.request,
+                pendingPlan.plan,
+                pendingPlan.currentPhaseIndex,
+                "full-socratic"
+              ),
+              push
+            );
+            const validation = await validatePhaseExecution(executionResult);
+            if (!validation.passed) {
+              pendingPlan.validationPassed = false;
+              pendingPlan.attempts = 0;
+              setModePhase("awaiting-validation");
+              updateActiveStep(`Waiting for the user to explain phase ${pendingPlan.currentPhaseIndex + 1}`);
+              pushTextChunk(push, `${validation.reason}\n`);
+              pushTextChunk(
+                push,
+                "I am keeping you on the same full-socratic phase because I did not see enough execution evidence in the repo.\n"
+              );
+              pushTextChunk(push, formatPhaseForUser(pendingPlan.plan, pendingPlan.currentPhaseIndex, "full-socratic"));
+              pushTextChunk(
+                push,
+                formatPhaseValidationPrompt(
+                  pendingPlan.plan,
+                  pendingPlan.currentPhaseIndex,
+                  pendingPlan.validationQuestions
+                )
+              );
+              return;
+            }
+
+            pendingPlan.currentPhaseIndex += 1;
+            pendingPlan.attempts = 0;
+            pendingPlan.validationPassed = false;
+
+            if (pendingPlan.currentPhaseIndex >= pendingPlan.plan.phases.length) {
+              pushTrail("milestone_complete", { mode: "full-socratic", goal: pendingPlan.plan.goal });
+              pushTextChunk(push, "Full-socratic mode finished every planned phase for this request.\n");
+              resetPendingPlan();
+              setReadyStateForMode();
+              return;
+            }
+
+            pendingPlan.validationQuestions = buildValidationQuestions(pendingPlan.plan, pendingPlan.currentPhaseIndex);
+            setModePhase("awaiting-validation");
+            updateActiveStep(`Waiting for the user to explain phase ${pendingPlan.currentPhaseIndex + 1}`);
+            pushTextChunk(
+              push,
+              "Phase completed. I’m moving to the next phase and will quiz you again before coding.\n"
+            );
+            pushTextChunk(push, formatPhaseForUser(pendingPlan.plan, pendingPlan.currentPhaseIndex, "full-socratic"));
+            pushTextChunk(
+              push,
+              formatPhaseValidationPrompt(
+                pendingPlan.plan,
+                pendingPlan.currentPhaseIndex,
+                pendingPlan.validationQuestions
+              )
+            );
+            return;
+          }
+
           setModePhase("verifying");
           updateActiveStep("Checking whether the user understands the implementation plan");
           pendingPlan.attempts += 1;
@@ -324,6 +519,7 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
           const result = await evaluateValidationAnswer(
             llm,
             pendingPlan.plan,
+            pendingPlan.currentPhaseIndex,
             pendingPlan.validationQuestions,
             message
           );
@@ -338,11 +534,14 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
             return;
           }
 
-          pushTextChunk(push, "Validation passed. I’m executing the approved plan now.\n");
-          pushTrail("milestone_complete", { mode: "full-socratic", goal: pendingPlan.plan.goal });
-          refreshAgentConfig();
-          await runAgentTurn(buildExecutionPrompt(pendingPlan.request, pendingPlan.plan, "full-socratic"), push);
-          resetPendingPlan();
+          pendingPlan.validationPassed = true;
+          setModePhase("awaiting-approval");
+          updateActiveStep(`Waiting for approval to execute phase ${pendingPlan.currentPhaseIndex + 1}`);
+          pushTextChunk(push, "Validation passed for this phase.\n");
+          pushTextChunk(
+            push,
+            `${formatExecutionApprovalPrompt(pendingPlan.plan, pendingPlan.currentPhaseIndex, "full-socratic")}\n`
+          );
           return;
         }
 
@@ -351,7 +550,7 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
           adapterFactory: createLLMAdapter,
         });
 
-        if (intent !== "project") {
+        if (intent === "quick_help" || (intent !== "project" && state.mode !== "full-socratic")) {
           setModePhase("executing");
           updateActiveStep(
             intent === "debug" ? "Working through the debugging request" : "Answering the current question"
@@ -378,11 +577,13 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
           });
           pendingPlan = {
             mode: "guided",
+            intent,
             request: message,
             plan,
             validationQuestions: [],
             attempts: 0,
             currentPhaseIndex: 0,
+            validationPassed: false,
           };
           pushTrail("milestone_start", { mode: "guided", goal: plan.goal, phases: plan.phases.length });
           pushTextChunk(push, formatPlanForUser(plan, "guided"));
@@ -402,20 +603,23 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
             request: message,
             sharedFiles: state.sharedFiles,
           });
-          const validationQuestions = buildValidationQuestions(plan);
+          const validationQuestions = buildValidationQuestions(plan, 0);
           pendingPlan = {
             mode: "full-socratic",
+            intent,
             request: message,
             plan,
             validationQuestions,
             attempts: 0,
             currentPhaseIndex: 0,
+            validationPassed: false,
           };
           pushTrail("milestone_start", { mode: "full-socratic", goal: plan.goal, phases: plan.phases.length });
           pushTextChunk(push, formatPlanForUser(plan, "full-socratic"));
-          pushTextChunk(push, formatValidationPrompt(validationQuestions));
+          pushTextChunk(push, formatPhaseForUser(plan, 0, "full-socratic"));
+          pushTextChunk(push, formatPhaseValidationPrompt(plan, 0, validationQuestions));
           setModePhase("awaiting-validation");
-          updateActiveStep("Waiting for the user to explain the design back");
+          updateActiveStep("Waiting for the user to explain phase 1 back");
           return;
         }
       });

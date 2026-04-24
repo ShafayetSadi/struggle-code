@@ -113,7 +113,7 @@ Modes now change the live runtime behavior:
 
 - `guided`: inspect the repo, explain the implementation phases and file ownership, then execute
 - `standard`: behave like a normal coding agent with minimal ceremony
-- `full-socratic`: explain the implementation phases, require the user to explain the design back, then execute only after validation
+- `full-socratic`: explain one phase at a time, quiz the user on that phase, require approval, then execute only that phase before repeating the loop
 
 ## Agent Tools
 

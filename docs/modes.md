@@ -81,9 +81,11 @@ Use `full-socratic` when the main risk is poor reasoning, hidden assumptions, or
 Behavior:
 
 - Start with the same phased implementation explanation as guided mode.
-- Before any coding, require the user to explain the architecture, file ownership, and verification path back in their own words.
-- If the explanation is weak, ask follow-up questions and keep execution blocked until the user demonstrates understanding.
-- Once the user passes validation, execute like a rigorous coding agent and pressure-test the riskiest boundaries.
+- Before each phase executes, require the user to explain that phase's goal, file ownership, and verification path back in their own words.
+- If the explanation is weak, ask targeted follow-up questions and keep execution blocked until the user demonstrates understanding.
+- After the user passes the quiz for the current phase, ask for explicit approval before executing that single phase.
+- After each completed phase, pause again, explain the next phase, and repeat the quiz-and-approval loop.
+- Route both project-building and debugging requests through this stricter loop; only quick-help questions should bypass it.
 - Keep the final explanation concise even though the learning loop is deeper.
 
 Verification standard:

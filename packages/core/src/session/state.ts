@@ -73,11 +73,13 @@ export interface RuntimeSessionContext {
 
 export interface PendingModePlan {
   mode: "guided" | "full-socratic";
+  intent: Intent;
   request: string;
   plan: ImplementationPlan;
   validationQuestions: ValidationQuestion[];
   attempts: number;
   currentPhaseIndex: number;
+  validationPassed: boolean;
 }
 
 export function now(): string {
