@@ -290,19 +290,19 @@ If you want to run the repo or inspect the implementation, start here:
 <tr>
 <td align="center" width="25%">
 <h4>Shafayetul Huda Sadi</h4>
-<br><a href="https://github.com/Shafayetsadi"><img src="https://img.shields.io/badge/GitHub-100000?style=flat&logo=github&logoColor=white"></a>
+<a href="https://github.com/Shafayetsadi"><img src="https://img.shields.io/badge/GitHub-100000?style=flat&logo=github&logoColor=white"></a>
 </td>
 <td align="center" width="25%">
 <h4>Mohammad Tanmoy Hossain Jifat</h4>
-<br><a href="https://github.com/"><img src="https://img.shields.io/badge/GitHub-100000?style=flat&logo=github&logoColor=white"></a>
+<a href="https://github.com/"><img src="https://img.shields.io/badge/GitHub-100000?style=flat&logo=github&logoColor=white"></a>
 </td>
 <td align="center" width="25%">
 <h4>Farhana Islam</h4>
-<br><a href="https://github.com/"><img src="https://img.shields.io/badge/GitHub-100000?style=flat&logo=github&logoColor=white"></a>
+<a href="https://github.com/"><img src="https://img.shields.io/badge/GitHub-100000?style=flat&logo=github&logoColor=white"></a>
 </td>
 <td align="center" width="25%">
 <h4>Arifur Rahman</h4>
-<br><a href="https://github.com/"><img src="https://img.shields.io/badge/GitHub-100000?style=flat&logo=github&logoColor=white"></a>
+<a href="https://github.com/"><img src="https://img.shields.io/badge/GitHub-100000?style=flat&logo=github&logoColor=white"></a>
 </td>
 </tr>
 </table>
