@@ -2,6 +2,7 @@ import type { Component } from "../pi-tui/src/index.js";
 import { Input, Key, renderPanel, visibleWidth } from "../pi-tui/src/index.js";
 
 import { chalk, P } from "./palette.js";
+import { formatTerminalLink, shortenMiddle, supportsOsc8Hyperlinks } from "./terminalLinks.js";
 
 export interface LoginIO {
   prompt(message: string): Promise<string>;
@@ -164,11 +165,9 @@ export class LoginOverlay implements Component, LoginIO {
 
   render(width: number): string[] {
     const contentWidth = Math.max(30, width - 8);
-    const body: string[] = this.authUrl ? [] : [chalk.hex(P.textMuted)("Complete provider login here without leaving the REPL."), ""];
+    const body: string[] = [chalk.hex(P.textMuted)("Complete provider login here without leaving the REPL."), ""];
 
-    // When the auth URL is visible, keep fewer prior status lines so the full
-    // URL still fits inside the fixed-height login overlay.
-    const lineBudget = this.authUrl ? 3 : 8;
+    const lineBudget = this.authUrl ? 4 : 8;
     for (const line of this.lines.slice(-lineBudget)) {
       body.push(...this.wrapLine(line, contentWidth));
     }
@@ -182,8 +181,15 @@ export class LoginOverlay implements Component, LoginIO {
         )
       );
       body.push("");
-      body.push(chalk.hex(P.textSecondary)("Raw URL (copy exactly):"));
-      body.push(...this.wrapLine(this.authUrl, contentWidth));
+
+      if (supportsOsc8Hyperlinks()) {
+        body.push(chalk.hex(P.textSecondary)("Open auth link:"));
+        body.push(formatTerminalLink(this.authUrl, "Click here to open authentication URL"));
+        body.push(chalk.hex(P.textMuted)(`Preview: ${shortenMiddle(this.authUrl, Math.max(36, contentWidth - 10))}`));
+      } else {
+        body.push(chalk.hex(P.textSecondary)("Raw URL (copy exactly):"));
+        body.push(...this.wrapLine(this.authUrl, contentWidth));
+      }
     }
 
     if (this.promptLabel) {

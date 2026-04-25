@@ -5,6 +5,7 @@ import { InvalidArgumentError } from "commander";
 import { AUTH_PATH, OAUTH_PROVIDERS, saveOAuthCredentials, saveProviderAuth } from "./configStore.js";
 import { copyToClipboard } from "./repl/clipboard.js";
 import type { LoginIO } from "./repl/loginOverlay.js";
+import { formatTerminalLink, supportsOsc8Hyperlinks } from "./repl/terminalLinks.js";
 
 interface ConsoleLoginIO extends LoginIO {
   close(): void;
@@ -23,8 +24,12 @@ async function createConsoleLoginIO(): Promise<ConsoleLoginIO> {
     writeLine: (message: string) => {
       process.stdout.write(`${message}\n`);
     },
-    writeLink: (_label: string, url: string) => {
-      process.stdout.write(`${url}\n`);
+    writeLink: (label: string, url: string) => {
+      process.stdout.write(`${label}\n`);
+      process.stdout.write(`${formatTerminalLink(url, "Open authentication URL")}\n`);
+      if (!supportsOsc8Hyperlinks()) {
+        process.stdout.write(`${url}\n`);
+      }
     },
   };
 }

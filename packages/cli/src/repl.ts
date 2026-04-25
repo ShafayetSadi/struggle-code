@@ -567,7 +567,7 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
     const overlay = tui.showOverlay(loginOverlay, {
       width: "100%",
       minWidth: 64,
-      maxHeight: 16,
+      maxHeight: 20,
       anchor: "bottom-center",
     });
     try {
