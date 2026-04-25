@@ -70,15 +70,22 @@ export default function Page() {
       </nav>
 
       <main className="pt-16">
-        <section className="mx-auto grid max-w-[1440px] items-center gap-16 px-8 py-24 lg:grid-cols-2 lg:py-32">
+        <section id="product" className="mx-auto grid max-w-[1440px] items-center gap-16 px-8 py-24 lg:grid-cols-2 lg:py-32">
           <div className="space-y-8">
             <h1 className="font-sans text-5xl font-extrabold leading-none tracking-tighter text-white lg:text-7xl">
               Stop shipping code you <span className="text-[#22C55E]">can&apos;t explain.</span>
             </h1>
             <p className="max-w-lg text-xl leading-relaxed text-zinc-400">
-              Most AI tools remove friction. Struggle AI adds the right friction so you actually understand what you
-              build.
+              We built Struggle AI around one belief: removing all friction from coding makes it easier to ship code
+              you do not actually own.
             </p>
+            <div className="max-w-xl rounded-xl border border-[#27272A] bg-[#121214] p-5">
+              <p className="font-mono text-xs uppercase tracking-[0.3em] text-[#22C55E]">Our Thesis</p>
+              <p className="mt-3 text-base leading-relaxed text-zinc-300">
+                The best coding tools should not remove every obstacle. They should add deliberate cognitive friction at
+                the moments where learning, ownership, and architectural clarity are at stake.
+              </p>
+            </div>
             <div className="flex flex-col gap-4 pt-4 sm:flex-row">
               <button
                 type="button"
@@ -141,31 +148,59 @@ export default function Page() {
           </div>
         </section>
 
-        <section className="border-y border-[#27272A] bg-[#050505] py-32">
+        <section id="manifesto" className="border-y border-[#27272A] bg-[#050505] py-32">
           <div className="mx-auto max-w-[1440px] px-8">
-            <div className="max-w-4xl space-y-24">
-              <div className="space-y-6">
-                <p className="font-mono text-sm uppercase tracking-[0.3em] text-[#22C55E]">The Crisis of Abstraction</p>
-                <h2 className="text-5xl font-bold tracking-tight text-white lg:text-7xl">
-                  AI can write your code.
-                  <br />
-                  But can you explain it?
-                </h2>
-              </div>
-              <div className="grid gap-16 md:grid-cols-2">
-                <div className="space-y-4">
-                  <h3 className="text-xl font-bold text-white">&quot;Ghost in the Machine&quot;</h3>
-                  <p className="leading-relaxed text-zinc-400">
-                    Most developers today cannot debug what AI generates. We are becoming curators of magic boxes rather
-                    than architects of systems.
-                  </p>
+            <div className="grid gap-12 lg:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.85fr)] lg:items-start">
+              <div className="space-y-16">
+                <div className="space-y-6">
+                  <p className="font-mono text-sm uppercase tracking-[0.3em] text-[#22C55E]">The Crisis of Abstraction</p>
+                  <h2 className="text-5xl font-bold tracking-tight text-white lg:text-7xl">
+                    AI can write your code.
+                    <br />
+                    But can you explain it?
+                  </h2>
                 </div>
-                <div className="space-y-4">
-                  <h3 className="text-xl font-bold text-white">Velocity vs. Understanding</h3>
-                  <p className="leading-relaxed text-zinc-400">
-                    Shipping 10x faster is useless if you&apos;re 10x slower at fixing the inevitable edge cases because
-                    you don&apos;t understand the logic underneath.
-                  </p>
+                <div className="grid gap-16 md:grid-cols-2">
+                  <div className="space-y-4">
+                    <h3 className="text-xl font-bold text-white">&quot;Ghost in the Machine&quot;</h3>
+                    <p className="leading-relaxed text-zinc-400">
+                      Most developers today cannot debug what AI generates. We are becoming curators of magic boxes rather
+                      than architects of systems.
+                    </p>
+                  </div>
+                  <div className="space-y-4">
+                    <h3 className="text-xl font-bold text-white">Velocity vs. Understanding</h3>
+                    <p className="leading-relaxed text-zinc-400">
+                      Shipping 10x faster is useless if you&apos;re 10x slower at fixing the inevitable edge cases because
+                      you don&apos;t understand the logic underneath.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-6 rounded-2xl border border-[#27272A] bg-[#121214] p-8 lg:sticky lg:top-24">
+                <p className="font-mono text-sm uppercase tracking-[0.3em] text-[#22C55E]">Why This Is Friction</p>
+                <p className="text-2xl font-bold leading-tight text-white">
+                  We are not using friction as delay. We are using friction as a tool for comprehension.
+                </p>
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <div className="text-sm font-semibold uppercase tracking-[0.2em] text-zinc-500">Interpretation</div>
+                    <p className="text-sm leading-relaxed text-zinc-400">
+                      Friction here is cognitive and educational, not mechanical slowdown.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-sm font-semibold uppercase tracking-[0.2em] text-zinc-500">Stance</div>
+                    <p className="text-sm leading-relaxed text-zinc-400">
+                      Some friction in coding is not a bug. It is a feature when ownership is at stake.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-sm font-semibold uppercase tracking-[0.2em] text-zinc-500">Claim</div>
+                    <p className="text-sm leading-relaxed text-zinc-400">
+                      A codebase you cannot explain is not productivity. It is dependency.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -180,6 +215,10 @@ export default function Page() {
             <p className="mx-auto max-w-2xl text-lg text-zinc-400">
               Struggle AI asks the right questions before writing any code — so you understand what you&apos;re
               building, not just copy it.
+            </p>
+            <p className="mx-auto max-w-2xl text-sm uppercase tracking-[0.2em] text-zinc-500">
+              The point is not to slow you down everywhere. The point is to slow you down exactly where understanding
+              would otherwise be skipped.
             </p>
           </div>
           <div className="mx-auto max-w-4xl overflow-hidden rounded-xl border border-[#27272A] bg-[#121214]">
@@ -303,13 +342,13 @@ export default function Page() {
           </div>
         </section>
 
-        <section className="mx-auto max-w-[1440px] px-8 py-32">
+        <section id="docs" className="mx-auto max-w-[1440px] px-8 py-32">
           <div className="grid gap-16 lg:grid-cols-12">
             <div className="space-y-6 lg:col-span-4">
               <h2 className="text-4xl font-bold leading-tight text-white">The Learning Trail</h2>
               <p className="leading-relaxed text-zinc-400">
-                Every session generates a live README.md that documents your learning progress, decisions made, and
-                technical debt acknowledged. It&apos;s your project&apos;s soul.
+                Every session can leave behind a living project artifact that records what you learned, which
+                decisions you made, and which trade-offs you accepted.
               </p>
               <div className="space-y-4 pt-8">
                 <div className="flex items-center gap-4 text-sm text-zinc-300">
@@ -334,33 +373,70 @@ export default function Page() {
 
         <section className="bg-[#050505] py-32">
           <div className="mx-auto max-w-[1440px] px-8">
-            <div className="mb-20 text-center">
-              <h2 className="text-4xl font-bold text-white">
+            <div className="mx-auto mb-20 max-w-3xl space-y-5 text-center">
+              <p className="font-mono text-sm uppercase tracking-[0.3em] text-[#22C55E]">Deliberate Progress</p>
+              <h2 className="text-4xl font-bold text-white md:text-5xl">
                 The <span className="text-[#22C55E]">Struggle</span> Workflow
               </h2>
+              <p className="text-lg leading-relaxed text-zinc-400">
+                Struggle is not trying to slow down everything. It inserts friction at the exact points where reasoning,
+                trade-offs, and ownership would normally be skipped.
+              </p>
             </div>
-            <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="relative">
+              <div
+                className="pointer-events-none absolute left-0 top-8 hidden h-px w-full bg-gradient-to-r from-transparent via-[#22C55E]/25 to-transparent lg:block"
+                aria-hidden
+              />
+              <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
               {[
-                { n: "1", t: "Ask", d: "Input your project requirements through the CLI or Web UI." },
-                { n: "2", t: "Think", d: "Struggle challenges your assumptions with clarifying questions." },
-                { n: "3", t: "Build", d: "Code is generated once you demonstrate architectural clarity." },
-                { n: "4", t: "Export", d: "Receive your source code and the Learning Trail documentation." },
+                {
+                  n: "1",
+                  t: "Ask",
+                  d: "Start with a real problem, not a vague vibe. Bring the request into the CLI and make the target explicit.",
+                },
+                {
+                  n: "2",
+                  t: "Think",
+                  d: "Struggle pushes back with clarifying questions so architecture, boundaries, and trade-offs are surfaced early.",
+                },
+                {
+                  n: "3",
+                  t: "Build",
+                  d: "Implementation moves forward only after the plan is coherent enough to own, defend, and verify.",
+                },
+                {
+                  n: "4",
+                  t: "Export",
+                  d: "Leave with code plus a Learning Trail that captures what you understood, not just what was generated.",
+                },
               ].map((step) => (
-                <div key={step.n} className="space-y-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-[#27272A] bg-[#121214] text-lg font-bold text-[#22C55E]">
-                    {step.n}
+                <div
+                  key={step.n}
+                  className="group relative overflow-hidden rounded-2xl border border-[#27272A] bg-[#121214] p-8 transition-all duration-200 hover:border-[#22C55E]/45 hover:bg-[#151816]"
+                >
+                  <div
+                    className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#22C55E]/35 to-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                    aria-hidden
+                  />
+                  <div className="mb-6 flex items-center justify-between">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-[#27272A] bg-[#18181B] text-xl font-bold text-[#22C55E] shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
+                      {step.n}
+                    </div>
+                    <div className="font-mono text-[11px] uppercase tracking-[0.25em] text-zinc-600">Step {step.n}</div>
                   </div>
-                  <h4 className="text-2xl font-bold text-white">{step.t}</h4>
-                  <p className="text-sm text-zinc-500">{step.d}</p>
+                  <h4 className="text-3xl font-bold tracking-tight text-white">{step.t}</h4>
+                  <p className="mt-4 text-base leading-relaxed text-zinc-400">{step.d}</p>
                 </div>
               ))}
+              </div>
             </div>
           </div>
         </section>
 
         <section className="py-32">
           <div className="mx-auto max-w-[1440px] px-8">
-            <div className="relative space-y-8 overflow-hidden rounded-2xl bg-[#22C55E] p-12 text-center lg:p-24">
+            <div className="relative overflow-hidden rounded-[32px] border border-[#2d2d2d] bg-[#22C55E] p-10 shadow-[0_24px_80px_rgba(34,197,94,0.14)] lg:p-20">
               <div
                 className="pointer-events-none absolute inset-0 opacity-10"
                 style={{
@@ -368,27 +444,43 @@ export default function Page() {
                   backgroundSize: "24px 24px",
                 }}
               />
-              <h2 className="relative z-10 text-4xl font-black tracking-tighter text-[#0A0A0B] lg:text-6xl">
-                Start building things you actually understand.
-              </h2>
-              <div className="relative z-10 mx-auto max-w-2xl space-y-6">
-                <div className="flex items-center justify-between rounded-xl bg-[#0A0A0B] p-4 font-mono text-lg text-white">
-                  <span>$ {CLI}</span>
-                  <InlineCopyRow command={CLI} layout="icon" />
+              <div className="relative z-10 grid gap-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.9fr)] lg:items-end">
+                <div className="space-y-6 text-center lg:text-left">
+                  <p className="font-mono text-sm uppercase tracking-[0.3em] text-[#0A0A0B]/65">Take A Stance</p>
+                  <h2 className="text-4xl font-black tracking-tighter text-[#0A0A0B] lg:text-6xl">
+                    Start building things you actually understand.
+                  </h2>
+                  <p className="mx-auto max-w-2xl text-lg leading-relaxed text-[#0A0A0B]/75 lg:mx-0">
+                    If AI is going to write with you, it should also force you to think with it. Install Struggle and
+                    make comprehension part of the workflow again.
+                  </p>
                 </div>
-                <div className="flex flex-col justify-center gap-4 sm:flex-row">
-                  <button
-                    type="button"
-                    className="rounded-lg bg-[#0A0A0B] px-8 py-4 font-bold text-white transition-opacity hover:opacity-90"
-                  >
-                    Get Started Free
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-lg border-2 border-[#0A0A0B] bg-transparent px-8 py-4 font-bold text-[#0A0A0B] transition-all hover:bg-[#0A0A0B] hover:text-[#22C55E]"
-                  >
-                    Read the Docs
-                  </button>
+                <div className="rounded-[24px] border border-[#0A0A0B]/15 bg-[#0c0c0d] p-5 text-left shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div className="font-mono text-[11px] uppercase tracking-[0.3em] text-[#22C55E]/80">Install CLI</div>
+                    <div className="font-mono text-[11px] uppercase tracking-[0.25em] text-zinc-500">Terminal First</div>
+                  </div>
+                  <div className="flex items-center justify-between rounded-2xl border border-white/5 bg-black px-4 py-4 font-mono text-base text-white">
+                    <span>$ {CLI}</span>
+                    <InlineCopyRow command={CLI} layout="icon" />
+                  </div>
+                  <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                    <button
+                      type="button"
+                      className="rounded-xl bg-[#22C55E] px-6 py-4 font-bold text-[#0A0A0B] transition-transform hover:-translate-y-0.5 hover:brightness-105"
+                    >
+                      Get Started Free
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-xl border border-white/10 bg-white/4 px-6 py-4 font-bold text-white transition-colors hover:bg-white/8"
+                    >
+                      Read the Docs
+                    </button>
+                  </div>
+                  <p className="mt-4 text-sm leading-relaxed text-zinc-400">
+                    Use AI as a mentor, not a vending machine. Ship the code and the reasoning behind it.
+                  </p>
                 </div>
               </div>
             </div>
