@@ -27,6 +27,7 @@ Use `guided` when you want the agent to behave like a careful senior engineer ra
 
 Behavior:
 
+- If the user message is casual chat or a general question that does not depend on repository context, answer directly and skip repo inspection.
 - Start by inspecting the relevant code and building a concrete implementation plan before any coding.
 - Explain how the project will work, which phases will happen, and what each phase is responsible for.
 - Name the files or modules the agent expects to create or update and why each one matters.
@@ -53,6 +54,7 @@ Use `standard` when you want fast, pragmatic execution with minimal ceremony.
 
 Behavior:
 
+- If the user message is casual chat or a general question that does not depend on repository context, answer directly and skip repo inspection.
 - Behave like a normal coding agent.
 - Get to the relevant file or command quickly.
 - Keep planning terse and spend most of the effort on implementation.
@@ -83,6 +85,7 @@ Use `socratic` when the main risk is poor reasoning, hidden assumptions, or weak
 
 Behavior:
 
+- If the user message is casual chat or a general question that does not depend on repository context, answer directly and skip repo inspection.
 - Start with the same phased implementation explanation as guided mode.
 - Before each phase executes, require the user to explain that phase's goal, file ownership, and verification path back in their own words.
 - If the explanation is weak, ask targeted follow-up questions and keep execution blocked until the user demonstrates understanding.
