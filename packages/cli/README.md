@@ -72,7 +72,6 @@ npm exec --workspace packages/cli struggle -- --provider openrouter --model open
 - `/help` shows every supported slash command
 - `/logout` clears saved credentials for the active provider
 - `/mode <guided|standard|socratic>` switches session mode
-- `/share <path>` adds a file to the active session context
 - `/stuck` triggers a stuck-session intervention
 - `/trail export [path] [--format md|pdf]` writes the current trail
 - `/exit` or `/quit` quits the REPL

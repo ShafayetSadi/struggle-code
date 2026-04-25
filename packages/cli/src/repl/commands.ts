@@ -18,7 +18,6 @@ Commands:
   /clear                    Clear the transcript
   /new                      Start a fresh session
   /resume [session-id]      List saved sessions or resume one by id
-  /share <path>             Share a file with the active session
   /stuck                    Trigger a stuck-session intervention
   /trail export [path] [--format md|pdf]
                             Export the learning trail
@@ -99,9 +98,6 @@ export function parseSlashCommand(input: string): SlashCommand | undefined {
         return { kind: "mode", mode: args[0] as Mode };
       }
       return { kind: "mode-menu" };
-    case "share":
-      if (args.length === 0) return { kind: "root-menu" };
-      return { kind: "share", path: args.join(" ") };
     case "stuck":
       return { kind: "stuck" };
     case "trail": {
@@ -183,12 +179,6 @@ export async function handleSlashCommand(
       syncHintState(session, replState);
       writeLine(chalk.hex(P.blue)(`mode set to ${command.mode}`));
       return "continue";
-    case "share": {
-      const resolved = resolve(projectPath, command.path);
-      await session.shareFile(resolved);
-      writeLine(chalk.hex(P.green)(`shared  ${resolved}`));
-      return "continue";
-    }
     case "stuck":
       await streamChunks(session.invokeStuck(), (chunk) => writeLines(formatChunk(chunk)));
       syncHintState(session, replState);

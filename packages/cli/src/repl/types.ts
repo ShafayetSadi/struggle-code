@@ -19,7 +19,6 @@ export type SlashCommand =
   | { kind: "logout" }
   | { kind: "mode"; mode: Mode }
   | { kind: "model"; model?: string }
-  | { kind: "share"; path: string }
   | { kind: "stuck" }
   | { kind: "trail-export"; path?: string; format: "md" | "pdf" };
 
