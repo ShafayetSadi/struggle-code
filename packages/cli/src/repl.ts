@@ -299,7 +299,9 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
           for (const line of lines) process.stdout.write(`${line}\n`);
         });
         lastGeneratedText = responseLines.join("\n").trimEnd();
-        void saveHistory(projectPath, session.getMessages());
+        void saveHistory(projectPath, session.getMessages()).catch((err: unknown) => {
+          io.notify("warn", `failed to save history: ${getErrorMessage(err)}`);
+        });
         syncHintState(session, replState);
         process.stdout.write("\n");
       } catch (error) {
@@ -679,7 +681,9 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
       }
       screen.stopStreaming();
       lastGeneratedText = responseLines.join("\n").trimEnd();
-      void saveHistory(projectPath, session.getMessages());
+      void saveHistory(projectPath, session.getMessages()).catch((err: unknown) => {
+        baseIO.notify("warn", `failed to save history: ${getErrorMessage(err)}`);
+      });
 
       syncHintState(session, replState);
       refreshSessionState();
