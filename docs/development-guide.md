@@ -1,6 +1,6 @@
 # Struggle AI Development Guide
 
-This guide is for developers working inside the Struggle AI monorepo after the initial scaffold. It covers the repo layout, package boundaries, local workflows, and the rules that matter when you start implementing real features.
+This guide covers the current developer workflow for the Struggle AI monorepo. It is intended to reflect the repository as it exists now, not the original scaffold phase.
 
 ## What This Repo Contains
 
@@ -8,41 +8,39 @@ Struggle AI is split into four workspaces:
 
 | Workspace | Purpose |
 | --- | --- |
-| `packages/core` | Shared product logic, public types, config resolution, and stub session behavior |
-| `packages/cli` | Node CLI shell that consumes `@struggle-ai/core` |
-| `packages/vscode` | VS Code extension shell and placeholder webview |
+| `packages/core` | Shared session engine, mode runtime, prompt loading, artifacts, and public types |
+| `packages/cli` | Terminal interface, REPL, config/auth commands, and terminal rendering |
+| `packages/vscode` | VS Code extension shell that talks to the CLI-backed session runtime |
 | `apps/landing` | Marketing site built with Next.js |
+
+## Current State
+
+The repo currently provides:
+
+- npm workspaces with strict TypeScript project references
+- Biome for formatting and linting
+- Vitest suites in each workspace
+- a real shared core with guided, standard, and Socratic flows
+- a working CLI with REPL commands such as `/mode`, `/share`, `/stuck`, `/hint`, and `/trail export`
+- CLI config/auth persistence under `~/.struggle-ai`
+- a VS Code extension that starts sessions through a CLI daemon bridge
+- a buildable landing page aligned to the current product story
+
+The main active gaps are:
+
+- richer VS Code polish beyond the current shell + trail view
+- broader end-to-end verification around live tool use
+- longer-term persistence beyond the current session/trail artifacts
 
 ## Architecture Rules
 
 These rules are not optional:
 
 1. `packages/core` is environment-agnostic.
-2. `packages/core` must not import terminal APIs, VS Code APIs, Node-specific file APIs for runtime behavior, or UI libraries.
-3. The CLI and VS Code extension talk to core through the `IO` interface.
+2. `packages/core` must not depend on terminal APIs, VS Code APIs, or caller-owned config persistence.
+3. Cross-surface behavior belongs in core first, then gets consumed by CLI and VS Code.
 4. The stable public contract lives in [packages/core/src/index.ts](/home/shafayetsadi/Projects/friction-hackathon/packages/core/src/index.ts) and [packages/core/src/types.ts](/home/shafayetsadi/Projects/friction-hackathon/packages/core/src/types.ts).
-5. If you need new cross-surface behavior, add it in core first, then consume it from CLI and extension.
-
-## Current State
-
-The repo currently provides:
-
-- strict TypeScript project references
-- npm workspaces
-- Biome for formatting and linting
-- Vitest scaffolding in every workspace
-- realistic mock session behavior in core
-- a working CLI entrypoint
-- a compiling VS Code extension bundle
-- a buildable landing page
-
-The repo does not yet provide:
-
-- real Socratic flow logic
-- real prompt files
-- a real CLI REPL
-- a real VS Code chat experience
-- production-grade persistence
+5. Runtime-specific concerns stay in the caller package.
 
 ## First-Time Setup
 
@@ -56,7 +54,7 @@ npm run build
 npm run test
 ```
 
-If all of those pass, your workspace is in a good state.
+If those pass, your local workspace is in good shape.
 
 ## Day-to-Day Commands
 
@@ -78,10 +76,9 @@ npm run test
 npm run dev:cli
 npm exec --workspace @struggle-ai/cli struggle -- --help
 npm exec --workspace @struggle-ai/cli struggle -- --project /tmp/struggle-fastapi-demo
-npm exec --workspace @struggle-ai/cli struggle -- --project /path/to/another/project
 ```
 
-Use the workspace CLI for local verification so you run the code from this repo, not the published package. The `-- --project <path>` form is the preferred way to test the CLI against different folders.
+Use the workspace CLI for local verification so you run the code from this repo, not a published package.
 
 ### VS Code extension
 
@@ -99,108 +96,90 @@ npm run dev:landing
 npm run build --workspace landing
 ```
 
-The landing app currently uses webpack-backed Next scripts for compatibility in restricted environments.
-
 ## Package-Specific Guidance
 
 ### `packages/core`
 
-This is the highest-risk package because every other product surface depends on it.
-
-- Keep exported APIs intentional and stable.
-- Prefer pure functions and small stateful adapters.
-- Keep mock behavior realistic until the real behavior is ready.
-- Treat `src/index.ts` as a contract, not just another barrel file.
-- If a feature requires file reads or UI effects, express it through `IO` or move it into the caller package.
+- Treat `src/index.ts` and `src/types.ts` as the public contract.
+- Keep mode behavior, trail artifacts, prompt loading, and shared orchestration in core.
+- If a feature needs filesystem, UI, or environment-specific behavior, express it through `IO` or keep it in the caller package.
+- Remember that the build must stage prompt markdown into `dist/prompts`.
 
 ### `packages/cli`
 
-- The CLI owns terminal rendering, config-file writes, and command parsing.
-- It may use Node APIs freely.
-- It should consume core as if core were a published library.
-- Don’t bypass core types by re-declaring session shapes locally.
+- The CLI owns terminal rendering, REPL command parsing, config writes, OAuth/config persistence, and local session ergonomics.
+- Shared auth/config helpers live in [packages/cli/src/configStore.ts](/home/shafayetsadi/Projects/friction-hackathon/packages/cli/src/configStore.ts).
+- If a user-facing auth/session action belongs in both the REPL and config command surface, keep those two paths aligned.
 
 ### `packages/vscode`
 
-- The extension owns activation, commands, tree views, webviews, and workspace file access.
-- Keep bundle entry logic in `src/extension.ts`.
-- If you add richer webview communication, keep the contract explicit and typed.
-- Avoid pulling core into VS Code-specific assumptions.
+- The extension owns activation, the webview shell, the Learning Trail view, and the CLI daemon bridge.
+- Keep extension logic explicit in `src/extension.ts`.
+- Avoid re-implementing core behavior inside the extension.
 
 ### `apps/landing`
 
-- This app is independent of the CLI and extension runtime flow.
 - Keep it focused on product communication and demo conversion.
-- Don’t let landing-page-only UI dependencies leak into the packages workspace.
+- It is a separate marketing/runtime surface, not part of the shared session engine.
 
-## Working on the Core Contract
+## Config and Auth Behavior
 
-Before changing public exports from core:
+- Core config resolution lives in [packages/core/src/config.ts](/home/shafayetsadi/Projects/friction-hackathon/packages/core/src/config.ts).
+- CLI provider config is stored in `~/.struggle-ai/config.json`.
+- OAuth credentials are stored in `~/.struggle-ai/auth.json`.
+- A real logout needs to clear both when the active provider uses saved auth.
 
-1. Check whether the change affects both CLI and VS Code.
-2. Update the types first.
-3. Update the stub implementations so downstream UI work still has believable output.
-4. Update tests in the package that consumes the changed behavior.
-5. Call out the contract change in your PR or handoff notes.
+## LLM and Runtime Notes
 
-## Config Behavior
-
-Core config resolution is intentionally pure.
-
-- [packages/core/src/config.ts](/home/shafayetsadi/Projects/friction-hackathon/packages/core/src/config.ts) resolves provider config and can parse injected config text.
-- The CLI owns actual reads and writes to `~/.struggle-ai/config.json`.
-- If another surface needs config persistence later, it should implement its own environment-specific loader and writer.
-
-## LLM Adapter Notes
-
-The `pi-ai` wrapper lives in [packages/core/src/llm/adapter.ts](/home/shafayetsadi/Projects/friction-hackathon/packages/core/src/llm/adapter.ts).
-
-- It currently targets the installed `@mariozechner/pi-ai` API.
-- It supports `anthropic`, `google`, and `openai`.
-- It requires API keys to be present in the configured environment variable.
-- It adapts the simplified internal `LLMMessage` shape into `pi-ai` context messages.
-
-If you upgrade `@mariozechner/pi-ai`, re-verify the adapter types before changing call sites.
+- The provider adapter lives in [packages/core/src/llm/adapter.ts](/home/shafayetsadi/Projects/friction-hackathon/packages/core/src/llm/adapter.ts).
+- The live coding/session runtime centers on the core session engine plus the coding-agent mode runtime in `packages/core/src/coding-agent`.
+- Current provider config supports `anthropic`, `google`, `openai`, plus additional configured variants defined in core config.
 
 ## Testing Strategy
 
-Each workspace has a lightweight passing test so the toolchain stays wired:
+Use fast tests in the package that owns the behavior.
 
-- core: intent classification
-- cli: entrypoint import
-- vscode: placeholder webview markup
-- landing: utility function
+- `packages/core` deserves the deepest coverage because both product surfaces depend on it.
+- Prefer unit and integration-level verification over expensive end-to-end flows during iteration.
+- For release readiness, use the repo-wide gate plus the shared manual QA flow in [manual-testing.md](manual-testing.md).
 
-As real features land:
+Recommended release gate:
 
-1. Add unit tests in the package that owns the logic.
-2. Keep core behavior well-covered because both shells depend on it.
-3. Prefer fast tests over end-to-end-heavy suites during hackathon iteration.
+```bash
+npm run check
+npm run build
+npm run test
+```
+
+Then run the workspace CLI smoke test:
+
+```bash
+npm exec --workspace packages/cli struggle -- --project /tmp/struggle-fastapi-demo
+```
 
 ## Recommended Development Flow
 
 When implementing a feature:
 
 1. Start in core if the behavior is shared.
-2. Add or update the public types if the shells need new data.
-3. Update the stub or real implementation in core.
-4. Wire the behavior into CLI or VS Code.
-5. Run targeted tests.
-6. Run the root verification commands before handing off.
+2. Update the public types first if callers need new data.
+3. Wire the feature into CLI or VS Code after the shared behavior is stable.
+4. Run targeted tests.
+5. Re-run the repo-wide gate before handing off.
 
 ## Pre-Handoff Checklist
-
-Before you hand work to another developer:
 
 - `npm run typecheck` passes
 - `npm run check` passes
 - `npm run build` passes
 - `npm run test` passes
-- your package’s manual smoke test still works
-- any contract changes are documented clearly
+- your manual smoke test still works for the affected surface
+- changed commands, prompts, or workflows are reflected in docs
 
 ## Related Docs
 
 - [README.md](/home/shafayetsadi/Projects/friction-hackathon/README.md)
-- [docs/implementation-plan.md](/home/shafayetsadi/Projects/friction-hackathon/docs/implementation-plan.md)
-- [docs/initial-prompt.md](/home/shafayetsadi/Projects/friction-hackathon/docs/initial-prompt.md)
+- [architecture.md](architecture.md)
+- [manual-testing.md](manual-testing.md)
+- [CONTRIBUTING.md](CONTRIBUTING.md)
+- [git-workflow.md](git-workflow.md)

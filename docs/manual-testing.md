@@ -25,9 +25,9 @@ npx @struggle-ai/cli --project /tmp/struggle-fastapi-demo
 Run these from the repo root:
 
 ```bash
+npm run check
 npm run build
-npm run test --workspace packages/core
-npm run test --workspace packages/cli
+npm run test
 ```
 
 Set one real provider before running the CLI:
@@ -205,8 +205,14 @@ Before demo prep or publish prep, run:
 
 ```bash
 npm run check
-npm run typecheck
+npm run build
 npm run test
+```
+
+Then run the local workspace CLI smoke test:
+
+```bash
+npm exec --workspace packages/cli struggle -- --project /tmp/struggle-fastapi-demo
 ```
 
 If manual testing fails, fix the bug first and re-run the relevant flow from this file.

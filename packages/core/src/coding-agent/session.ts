@@ -130,6 +130,49 @@ function renderToolResultSummary(toolResults: ToolResultMessage[]): string[] {
   });
 }
 
+function isSimpleSingleFileTask(message: string): boolean {
+  const text = message.toLowerCase();
+  const simpleAction = /\b(create|add|make|new|delete|remove|rename|move)\b/.test(text);
+  if (!simpleAction) {
+    return false;
+  }
+
+  // Require at least one explicit file-like token to avoid over-triggering.
+  const fileLikeMatches =
+    message.match(/([A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+\.[A-Za-z0-9_-]+/g) ??
+    message.match(/([A-Za-z0-9._-]+\/)+[A-Za-z0-9._-]+/g) ??
+    [];
+
+  if (fileLikeMatches.length !== 1) {
+    return false;
+  }
+
+  // Avoid treating architectural or multi-step asks as simple single-file tasks.
+  if (
+    /\b(architecture|design|refactor|flow|module|system|migrate|integrate|multiple|whole repo|entire repo|project-wide)\b/.test(
+      text
+    )
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function buildSimpleTaskExecutionPrompt(message: string, mode: Mode): string {
+  if (mode !== "guided" && mode !== "socratic") {
+    return message;
+  }
+
+  return [
+    "Simple task triage result: this is a small single-file operation.",
+    "Skip architecture discussion and mode interview for this turn.",
+    "Execute the task directly with minimal explanation.",
+    "Original user request:",
+    message,
+  ].join("\n");
+}
+
 export async function createCodingAgentSession(
   projectPath: string,
   io: IO,
@@ -647,6 +690,18 @@ export async function createCodingAgentSession(
             push,
             `${formatExecutionApprovalPrompt(pendingPlan.plan, pendingPlan.currentPhaseIndex, "socratic")}\n`
           );
+          return;
+        }
+
+        if (isSimpleSingleFileTask(message)) {
+          setModePhase("executing");
+          updateActiveStep("Executing a simple single-file task directly");
+          pushTrail("bypass", {
+            reason: "simple_single_file_task",
+            mode: state.mode,
+          });
+          refreshAgentConfig();
+          await runAgentTurn(buildSimpleTaskExecutionPrompt(message, state.mode), push);
           return;
         }
 

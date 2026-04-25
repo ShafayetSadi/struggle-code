@@ -160,6 +160,28 @@ export function getPanelHtml(): string {
         transition: color .15s, background .15s;
       }
       .icon-btn:hover { color: var(--text); background: #18181b; }
+      .auth-btn {
+        border: 1px solid #27272a;
+        border-radius: 8px;
+        background: #18181b;
+        color: var(--muted);
+        font: 700 11px/16px Inter, sans-serif;
+        letter-spacing: .05em;
+        text-transform: uppercase;
+        padding: 6px 10px;
+        cursor: pointer;
+        transition: border-color .15s, color .15s, background .15s;
+      }
+      .auth-btn:hover {
+        border-color: rgba(75, 226, 119, .45);
+        color: var(--text);
+      }
+      .auth-btn.signed-in {
+        border-color: rgba(255, 180, 171, .25);
+        color: var(--error);
+        background: var(--error-weak);
+      }
+      .auth-btn:disabled { opacity: .45; cursor: not-allowed; }
       .stage {
         flex: 1;
         min-height: 0;
@@ -539,6 +561,7 @@ export function getPanelHtml(): string {
             <button class="mode-option" type="button" data-mode="socratic">Socratic Mode</button>
           </div>
         </div>
+        <button class="auth-btn" id="auth-btn" type="button">Login</button>
         <button class="icon-btn" id="settings-btn" title="More options" aria-label="More options">
           <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
             <path d="M8 3.2a1.2 1.2 0 110-2.4 1.2 1.2 0 010 2.4zm0 6a1.2 1.2 0 110-2.4 1.2 1.2 0 010 2.4zm0 6a1.2 1.2 0 110-2.4 1.2 1.2 0 010 2.4z"/>
@@ -616,8 +639,10 @@ export function getPanelHtml(): string {
       const shareActEl   = document.getElementById("share-active-btn");
       const modelBtnEl   = document.getElementById("model-btn");
       const modelLabelEl = document.getElementById("model-label");
+      const authBtnEl    = document.getElementById("auth-btn");
       const contextBadge = document.getElementById("context-badge");
       const slashPopup   = document.getElementById("slash-popup");
+      let isAuthenticated = false;
 
       const SLASH_COMMANDS = [
         { cmd: "/help",  desc: "explain current content",   icon: "?",  cls: "green" },
@@ -648,18 +673,27 @@ export function getPanelHtml(): string {
         modeButtonEl.disabled = busy;
         shareActEl.disabled   = busy;
         modelBtnEl.disabled   = busy;
+        authBtnEl.disabled    = busy;
       }
 
       function updateHeader(payload) {
         const nextMode = payload.mode || "guided";
         modeSelectEl.value = nextMode;
         updateModeUi(nextMode);
+        setAuthUi(!!payload.isAuthenticated);
         if (payload.providerLabel) modelLabelEl.textContent = payload.providerLabel;
         if (!payload.contextLabel) {
           contextBadge.classList.remove("visible");
           contextBadge.textContent = "";
         }
         setBusy(!!payload.busy);
+      }
+
+      function setAuthUi(nextIsAuthenticated) {
+        isAuthenticated = nextIsAuthenticated;
+        authBtnEl.textContent = isAuthenticated ? "Logout" : "Login";
+        authBtnEl.classList.toggle("signed-in", isAuthenticated);
+        authBtnEl.setAttribute("aria-label", isAuthenticated ? "Logout" : "Login");
       }
 
       function modeLabel(mode) {
@@ -931,6 +965,9 @@ export function getPanelHtml(): string {
       });
       modelBtnEl.addEventListener("click",
         () => vscode.postMessage({ type: "pickModel" }));
+      authBtnEl.addEventListener("click", () => {
+        vscode.postMessage({ type: isAuthenticated ? "logout" : "login" });
+      });
       document.getElementById("settings-btn").addEventListener("click",
         () => vscode.postMessage({ type: "exportTrail" }));
 
