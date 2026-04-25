@@ -131,7 +131,18 @@ export function activate(context: vscode.ExtensionContext): void {
 
       out.show(true);
       log(`spawning CLI daemon`);
-      cli = spawnCliDaemon(context.extensionPath, log);
+      cli = spawnCliDaemon(context.extensionPath, log, () => {
+        void vscode.window.showErrorMessage(
+          "Struggle AI: CLI not found. Install it globally first.",
+          "Show install command"
+        ).then((choice) => {
+          if (choice === "Show install command") {
+            const terminal = vscode.window.createTerminal("Struggle AI Setup");
+            terminal.show();
+            terminal.sendText("npm install -g @struggle-ai/cli");
+          }
+        });
+      });
 
       activePanel = vscode.window.createWebviewPanel("struggle.panel", "Struggle AI", vscode.ViewColumn.Beside, {
         enableScripts: true,

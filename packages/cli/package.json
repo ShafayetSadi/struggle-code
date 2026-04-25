@@ -1,29 +1,55 @@
 {
   "name": "@struggle-ai/cli",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.1.3",
+  "description": "Struggle AI — a Socratic coding mentor CLI that guides you through problems with questions, not answers.",
+  "author": "Struggle AI",
+  "license": "MIT",
+  "homepage": "https://github.com/ShafayetSadi/struggle-code#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ShafayetSadi/struggle-code.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/ShafayetSadi/struggle-code/issues"
+  },
+  "keywords": [
+    "ai",
+    "coding",
+    "mentor",
+    "socratic",
+    "learning",
+    "cli",
+    "struggle"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "struggle": "./dist/index.js"
+    "struggle": "dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE"
   ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node ./scripts/build.mjs",
     "dev": "tsc -p tsconfig.json --watch",
     "test": "vitest run"
   },
-  "dependencies": {
+  "devDependencies": {
     "@mariozechner/pi-ai": "^0.70.2",
     "@mariozechner/pi-tui": "^0.69.0",
     "@struggle-ai/core": "0.1.0",
+    "@types/node": "^25.6.0",
     "chalk": "^5.6.2",
-    "commander": "^14.0.3"
-  },
-  "devDependencies": {
-    "@types/node": "^25.6.0"
+    "commander": "^14.0.3",
+    "esbuild": "^0.28.0",
+    "vitest": "4.1.5",
+    "vscode": "1.1.36",
+    "zod": "^4.3.6"
   }
 }
