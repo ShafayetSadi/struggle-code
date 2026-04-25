@@ -1,13 +1,20 @@
 import type { Component, SelectItem } from "../pi-tui/src/index.js";
-import { renderPanel, SelectList } from "../pi-tui/src/index.js";
+import { padToWidth, renderPanel, SelectList } from "../pi-tui/src/index.js";
 
 import { chalk, P } from "./palette.js";
 
-export class ModelMenu implements Component {
+export const HELP_MENU_ITEMS: SelectItem[] = [
+  { value: "/hint", label: "/hint", description: "Ask for the next hint" },
+  { value: "/hint 2", label: "/hint 2", description: "Ask for a stronger hint" },
+  { value: "/hint 3", label: "/hint 3", description: "Ask for the strongest hint" },
+  { value: "/stuck", label: "/stuck", description: "Start the stuck diagnostic flow" },
+];
+
+export class HelpMenu implements Component {
   private readonly list: SelectList;
 
-  constructor(items: SelectItem[], currentModel: string, onSelect: (item: SelectItem) => void, onCancel: () => void) {
-    this.list = new SelectList(items, 10, {
+  constructor(onSelect: (item: SelectItem) => void, onCancel: () => void) {
+    this.list = new SelectList(HELP_MENU_ITEMS, 8, {
       selectedPrefix: (text) => chalk.hex(P.blue)(text),
       selectedText: (text) => chalk.hex(P.textPrimary).bold(text),
       description: (text) => chalk.hex(P.textMuted)(text),
@@ -16,7 +23,6 @@ export class ModelMenu implements Component {
     });
     this.list.onSelect = onSelect;
     this.list.onCancel = onCancel;
-    this.list.selectValue(currentModel);
   }
 
   handleInput(data: string): void {
@@ -29,7 +35,7 @@ export class ModelMenu implements Component {
 
   render(width: number): string[] {
     return renderPanel(
-      "Models",
+      "Help",
       [
         chalk.hex(P.textMuted)("Use ↑↓ to choose, Enter to apply, Esc to close."),
         "",
@@ -39,7 +45,7 @@ export class ModelMenu implements Component {
       {
         background: (text) => chalk.bgHex(P.bgPanel)(text),
         title: (text) => chalk.hex(P.textSecondary)(`  ${text}`),
-        body: (text) => text,
+        body: (text) => padToWidth(text, Math.max(48, width)),
       }
     );
   }

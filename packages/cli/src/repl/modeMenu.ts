@@ -1,13 +1,26 @@
+import type { Mode } from "@struggle-ai/core";
+
 import type { Component, SelectItem } from "../pi-tui/src/index.js";
-import { renderPanel, SelectList } from "../pi-tui/src/index.js";
+import { padToWidth, renderPanel, SelectList } from "../pi-tui/src/index.js";
 
 import { chalk, P } from "./palette.js";
 
-export class ModelMenu implements Component {
+export const MODE_MENU_ITEMS: SelectItem[] = [
+  { value: "guided", label: "guided", description: "Step-by-step planning with active nudges" },
+  { value: "standard", label: "standard", description: "Balanced direct help without extra ceremony" },
+  { value: "socratic", label: "socratic", description: "Question-led mode that checks understanding first" },
+];
+
+export class ModeMenu implements Component {
   private readonly list: SelectList;
 
-  constructor(items: SelectItem[], currentModel: string, onSelect: (item: SelectItem) => void, onCancel: () => void) {
-    this.list = new SelectList(items, 10, {
+  constructor(currentMode: Mode, onSelect: (item: SelectItem) => void, onCancel: () => void) {
+    const items = MODE_MENU_ITEMS.map((item) => ({
+      ...item,
+      ...(item.value === currentMode ? { description: `current - ${item.description ?? ""}` } : {}),
+    }));
+
+    this.list = new SelectList(items, 6, {
       selectedPrefix: (text) => chalk.hex(P.blue)(text),
       selectedText: (text) => chalk.hex(P.textPrimary).bold(text),
       description: (text) => chalk.hex(P.textMuted)(text),
@@ -16,7 +29,7 @@ export class ModelMenu implements Component {
     });
     this.list.onSelect = onSelect;
     this.list.onCancel = onCancel;
-    this.list.selectValue(currentModel);
+    this.list.selectValue(currentMode);
   }
 
   handleInput(data: string): void {
@@ -29,7 +42,7 @@ export class ModelMenu implements Component {
 
   render(width: number): string[] {
     return renderPanel(
-      "Models",
+      "Modes",
       [
         chalk.hex(P.textMuted)("Use ↑↓ to choose, Enter to apply, Esc to close."),
         "",
@@ -39,7 +52,7 @@ export class ModelMenu implements Component {
       {
         background: (text) => chalk.bgHex(P.bgPanel)(text),
         title: (text) => chalk.hex(P.textSecondary)(`  ${text}`),
-        body: (text) => text,
+        body: (text) => padToWidth(text, Math.max(48, width)),
       }
     );
   }

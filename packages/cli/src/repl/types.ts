@@ -10,10 +10,10 @@ export type SlashCommand =
   | { kind: "help" }
   | { kind: "mode-menu" }
   | { kind: "providers-menu" }
-  | { kind: "model" }
   | { kind: "copy" }
   | { kind: "clear" }
   | { kind: "new" }
+  | { kind: "resume"; historyId?: string }
   | { kind: "exit" }
   | { kind: "login"; provider?: string }
   | { kind: "providers"; provider?: string }

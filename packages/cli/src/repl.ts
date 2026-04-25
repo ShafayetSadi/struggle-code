@@ -1,7 +1,14 @@
 import { createInterface, type Interface } from "node:readline/promises";
 
 import { getModels } from "@mariozechner/pi-ai";
-import { DEFAULT_CONFIGS, type IO, type Provider, type ProviderConfig, startSession } from "@struggle-ai/core";
+import {
+  type AgentMessage,
+  DEFAULT_CONFIGS,
+  type IO,
+  type Provider,
+  type ProviderConfig,
+  startSession,
+} from "@struggle-ai/core";
 
 import {
   CONFIG_PATH,
@@ -11,6 +18,8 @@ import {
   OAUTH_PROVIDERS,
   writeConfigFile,
 } from "./configStore.js";
+import type { HistorySummary } from "./historyStore.js";
+import { listHistories, loadHistoryRecord, saveHistory } from "./historyStore.js";
 import { cliIO } from "./ioImpl.js";
 import { runProviderLogin } from "./oauthLogin.js";
 import { Key, ProcessTerminal, TUI } from "./pi-tui/src/index.js";
@@ -27,14 +36,18 @@ import {
   syncHintState,
 } from "./repl/commands.js";
 import { chalk, formatChunk, formatPrompt, P } from "./repl/formatting.js";
+import { HelpMenu } from "./repl/helpMenu.js";
 import { createTuiIO } from "./repl/io.js";
+import { ModeMenu } from "./repl/modeMenu.js";
 import { LoginOverlay } from "./repl/loginOverlay.js";
 import { ModelMenu } from "./repl/modelMenu.js";
+import { ResumeMenu } from "./repl/resumeMenu.js";
 import { ReplScreen } from "./repl/screen.js";
 import type { ReplState, SlashCommand } from "./repl/types.js";
 
 const COMMAND_HINT = "type / for commands";
 type ModelInfo = { id: string };
+type HistoryNotice = { historyId: string; lines: string[] };
 
 function resolveModelId(requested: string, available: ModelInfo[]): string | undefined {
   const exact = available.find((entry) => entry.id === requested);
@@ -102,19 +115,124 @@ function isModelUnavailableMessage(message: string): boolean {
   return /no longer available|model .* not available|please switch/i.test(message.toLowerCase());
 }
 
+function formatSavedAt(value: string): string {
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) {
+    return value;
+  }
+  return new Date(parsed).toISOString().replace("T", " ").slice(0, 16);
+}
+
+function extractMessageText(message: AgentMessage): string[] {
+  const { content } = message;
+  if (typeof content === "string") {
+    return content.trim().length > 0 ? [content.trim()] : [];
+  }
+  if (!Array.isArray(content)) {
+    return [];
+  }
+
+  const lines: string[] = [];
+  for (const block of content) {
+    if ("type" in block && block.type === "text" && "text" in block && typeof block.text === "string") {
+      const trimmed = block.text.trim();
+      if (trimmed.length > 0) {
+        lines.push(trimmed);
+      }
+    }
+  }
+  return lines;
+}
+
+function appendRestoredTranscript(screen: ReplScreen, messages: AgentMessage[] | undefined): void {
+  if (!messages) {
+    return;
+  }
+
+  for (const message of messages) {
+    if (message.role !== "user" && message.role !== "assistant") {
+      continue;
+    }
+
+    const lines = extractMessageText(message);
+    if (lines.length === 0) {
+      continue;
+    }
+
+    screen.append(message.role === "user" ? "user" : "assistant", ...lines);
+  }
+}
+
+async function buildResumeListing(projectPath: string): Promise<string[]> {
+  const histories = await listHistories(projectPath);
+  if (histories.length === 0) {
+    return ["no saved sessions for this project", "start chatting and Struggle will save sessions here automatically"];
+  }
+
+  const lines = ["saved sessions:"];
+  for (const history of histories.slice(0, 8)) {
+    lines.push(
+      `  /resume ${history.id}  ${formatSavedAt(history.savedAt)}  ${history.messageCount} msgs  ${history.preview}`
+    );
+  }
+  if (histories.length > 8) {
+    lines.push(`  ...and ${histories.length - 8} more`);
+  }
+  return lines;
+}
+
+function formatResumeMenuItems(
+  histories: HistorySummary[]
+): Array<{ value: string; label: string; description: string }> {
+  return histories.map((history) => ({
+    value: history.id,
+    label: history.title,
+    description: `${formatSavedAt(history.savedAt)}  ${history.messageCount} msgs  ${history.preview}`,
+  }));
+}
+
+async function resolveResumeTarget(projectPath: string, historyId?: string): Promise<HistoryNotice> {
+  if (!historyId) {
+    return {
+      historyId: "",
+      lines: await buildResumeListing(projectPath),
+    };
+  }
+
+  const record = await loadHistoryRecord(projectPath, historyId);
+  if (!record) {
+    return {
+      historyId: "",
+      lines: [`no saved session found for id ${historyId}`, ...(await buildResumeListing(projectPath))],
+    };
+  }
+
+  return {
+    historyId: record.id,
+    lines: [`resumed ${record.messages.length} messages from session ${record.id}`],
+  };
+}
+
 export interface RunReplOptions {
   projectPath?: string;
   io?: IO;
   config?: ProviderConfig;
   input?: NodeJS.ReadableStream;
   output?: NodeJS.WritableStream;
+  resume?: boolean;
 }
 
 async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> {
   const projectPath = options.projectPath ?? process.cwd();
   const io = options.io ?? cliIO;
   let currentConfig = options.config ?? DEFAULT_CONFIGS.anthropic;
-  let session = await startSession(projectPath, io, currentConfig);
+  const initialHistory = options.resume ? await loadHistoryRecord(projectPath) : null;
+  const initialMessages = initialHistory?.messages ?? undefined;
+  let activeHistoryId = initialHistory?.id ?? "";
+  let session = await startSession(projectPath, io, currentConfig, initialMessages);
+  if (!activeHistoryId) {
+    activeHistoryId = session.state.id;
+  }
   setAvailableProviders(await listAuthenticatedProviders());
   let lastGeneratedText: string | undefined;
   const replState: ReplState = {
@@ -195,6 +313,15 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
 
   process.stdout.write(chalk.hex(P.textPrimary).bold("Struggle AI") + chalk.hex(P.textMuted)("  interactive\n"));
   process.stdout.write(chalk.hex(P.textMuted)(`${COMMAND_HINT}\n\n`));
+  if (options.resume) {
+    if (initialHistory && initialMessages && initialMessages.length > 0) {
+      process.stdout.write(
+        chalk.hex(P.textMuted)(`resumed ${initialMessages.length} messages from session ${initialHistory.id}\n\n`)
+      );
+    } else {
+      process.stdout.write(chalk.hex(P.textMuted)("no saved history for this project — starting fresh\n\n"));
+    }
+  }
 
   try {
     while (true) {
@@ -226,9 +353,42 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
           }
           if (command.kind === "new") {
             session = await startSession(projectPath, io, currentConfig);
+            activeHistoryId = session.state.id;
             replState.hintLevel = 1;
             replState.lastMilestone = session.state.activeMilestone;
             process.stdout.write(chalk.hex(P.green)("started a fresh session\n"));
+            process.stdout.write(chalk.hex(P.textMuted)(`${COMMAND_HINT}\n`));
+            continue;
+          }
+          if (command.kind === "resume") {
+            if (!command.historyId) {
+              for (const line of await buildResumeListing(projectPath)) {
+                process.stdout.write(`${chalk.hex(P.textMuted)(line)}\n`);
+              }
+              process.stdout.write(chalk.hex(P.textMuted)(`${COMMAND_HINT}\n`));
+              continue;
+            }
+
+            const resumedHistory = await loadHistoryRecord(projectPath, command.historyId);
+            if (!resumedHistory) {
+              for (const line of await resolveResumeTarget(projectPath, command.historyId).then(
+                (result) => result.lines
+              )) {
+                process.stdout.write(`${chalk.hex(P.textMuted)(line)}\n`);
+              }
+              process.stdout.write(chalk.hex(P.textMuted)(`${COMMAND_HINT}\n`));
+              continue;
+            }
+
+            session = await startSession(projectPath, io, currentConfig, resumedHistory.messages);
+            activeHistoryId = resumedHistory.id;
+            replState.hintLevel = 1;
+            replState.lastMilestone = session.state.activeMilestone;
+            process.stdout.write(
+              chalk.hex(P.green)(
+                `resumed ${resumedHistory.messages.length} messages from session ${resumedHistory.id}\n`
+              )
+            );
             process.stdout.write(chalk.hex(P.textMuted)(`${COMMAND_HINT}\n`));
             continue;
           }
@@ -276,6 +436,9 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
           for (const line of lines) process.stdout.write(`${line}\n`);
         });
         lastGeneratedText = responseLines.join("\n").trimEnd();
+        void saveHistory(projectPath, activeHistoryId, session.getMessages()).catch((err: unknown) => {
+          io.notify("warn", `failed to save history: ${getErrorMessage(err)}`);
+        });
         syncHintState(session, replState);
         process.stdout.write("\n");
       } catch (error) {
@@ -319,7 +482,13 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
   };
 
   const io = createTuiIO(baseIO, writeLine);
-  let session = await startSession(projectPath, io, currentConfig);
+  const initialHistory = options.resume ? await loadHistoryRecord(projectPath) : null;
+  const initialMessages = initialHistory?.messages ?? undefined;
+  let activeHistoryId = initialHistory?.id ?? "";
+  let session = await startSession(projectPath, io, currentConfig, initialMessages);
+  if (!activeHistoryId) {
+    activeHistoryId = session.state.id;
+  }
   setAvailableProviders(await listAuthenticatedProviders());
   let lastGeneratedText: string | undefined;
   const replState: ReplState = {
@@ -398,7 +567,7 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
     const overlay = tui.showOverlay(loginOverlay, {
       width: "100%",
       minWidth: 64,
-      maxHeight: 16,
+      maxHeight: 20,
       anchor: "bottom-center",
     });
     try {
@@ -433,6 +602,14 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
 
   for (const line of pending.splice(0)) screen.append("system", line);
   screen.append("system", COMMAND_HINT);
+  if (options.resume) {
+    if (initialHistory && initialMessages && initialMessages.length > 0) {
+      appendRestoredTranscript(screen, initialMessages);
+      screen.append("system", `resumed ${initialMessages.length} messages from session ${initialHistory.id}`);
+    } else {
+      screen.append("system", "no saved history for this project — starting fresh");
+    }
+  }
 
   tui.addChild(screen);
   tui.setFocus(screen);
@@ -442,7 +619,67 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
     resolveExit?.();
   };
 
+  let helpMenuOpen = false;
+  let modeMenuOpen = false;
   let modelMenuOpen = false;
+
+  const openHelpMenu = () => {
+    if (helpMenuOpen) return;
+    helpMenuOpen = true;
+
+    const overlay = tui.showOverlay(
+      new HelpMenu(
+        (item) => {
+          overlay.hide();
+          helpMenuOpen = false;
+          tui.setFocus(screen);
+          void submitValue(item.value);
+        },
+        () => {
+          overlay.hide();
+          helpMenuOpen = false;
+          tui.setFocus(screen);
+          tui.requestRender();
+        }
+      ),
+      {
+        width: "100%",
+        minWidth: 50,
+        maxHeight: 11,
+        anchor: "bottom-center",
+      }
+    );
+  };
+
+  const openModeMenu = () => {
+    if (modeMenuOpen) return;
+    modeMenuOpen = true;
+
+    const overlay = tui.showOverlay(
+      new ModeMenu(
+        session.state.mode,
+        (item) => {
+          overlay.hide();
+          modeMenuOpen = false;
+          tui.setFocus(screen);
+          void submitValue(`/mode ${item.value}`);
+        },
+        () => {
+          overlay.hide();
+          modeMenuOpen = false;
+          tui.setFocus(screen);
+          tui.requestRender();
+        }
+      ),
+      {
+        width: "100%",
+        minWidth: 50,
+        maxHeight: 10,
+        anchor: "bottom-center",
+      }
+    );
+  };
+
   const openModelMenu = () => {
     if (modelMenuOpen) return;
     modelMenuOpen = true;
@@ -479,6 +716,44 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
     );
   };
 
+  let resumeMenuOpen = false;
+  const openResumeMenu = async () => {
+    if (resumeMenuOpen) return;
+
+    const histories = await listHistories(projectPath);
+    if (histories.length === 0) {
+      screen.append("system", "no saved sessions for this project");
+      screen.append("system", "start chatting and Struggle will save sessions here automatically");
+      return;
+    }
+
+    resumeMenuOpen = true;
+    const overlay = tui.showOverlay(
+      new ResumeMenu(
+        formatResumeMenuItems(histories),
+        activeHistoryId,
+        (item) => {
+          overlay.hide();
+          resumeMenuOpen = false;
+          tui.setFocus(screen);
+          void submitValue(`/resume ${item.value}`);
+        },
+        () => {
+          overlay.hide();
+          resumeMenuOpen = false;
+          tui.setFocus(screen);
+          tui.requestRender();
+        }
+      ),
+      {
+        width: "100%",
+        minWidth: 64,
+        maxHeight: 14,
+        anchor: "bottom-center",
+      }
+    );
+  };
+
   const refreshSessionState = () => {
     screen.setMode(session.state.mode);
     screen.setActiveSubProblem(session.state.activeSubProblem);
@@ -508,8 +783,7 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
           return;
         }
         if (command.kind === "help") {
-          screen.setInputValue("/help ");
-          tui.requestRender();
+          openHelpMenu();
           return;
         }
         if (command.kind === "login" && !("provider" in command && command.provider)) {
@@ -523,8 +797,7 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
           return;
         }
         if (command.kind === "mode-menu") {
-          screen.setInputValue("/mode ");
-          tui.requestRender();
+          openModeMenu();
           return;
         }
         if (command.kind === "model" && (!("model" in command) || !command.model)) {
@@ -554,11 +827,44 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
         if (command.kind === "new") {
           screen.clearEntries();
           session = await startSession(projectPath, io, currentConfig);
+          activeHistoryId = session.state.id;
           replState.hintLevel = 1;
           replState.lastMilestone = session.state.activeMilestone;
           screen.setMode(session.state.mode);
           screen.setActiveSubProblem(session.state.activeSubProblem);
           screen.append("system", "started a fresh session");
+          screen.append("system", COMMAND_HINT);
+          return;
+        }
+        if (command.kind === "resume") {
+          if (!command.historyId) {
+            await openResumeMenu();
+            return;
+          }
+
+          const resumedHistory = await loadHistoryRecord(projectPath, command.historyId);
+          if (!resumedHistory) {
+            for (const line of await resolveResumeTarget(projectPath, command.historyId).then(
+              (result) => result.lines
+            )) {
+              screen.append("system", line);
+            }
+            screen.append("system", COMMAND_HINT);
+            return;
+          }
+
+          screen.clearEntries();
+          session = await startSession(projectPath, io, currentConfig, resumedHistory.messages);
+          activeHistoryId = resumedHistory.id;
+          replState.hintLevel = 1;
+          replState.lastMilestone = session.state.activeMilestone;
+          screen.setMode(session.state.mode);
+          screen.setActiveSubProblem(session.state.activeSubProblem);
+          appendRestoredTranscript(screen, resumedHistory.messages);
+          screen.append(
+            "system",
+            `resumed ${resumedHistory.messages.length} messages from session ${resumedHistory.id}`
+          );
           screen.append("system", COMMAND_HINT);
           return;
         }
@@ -632,6 +938,9 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
       }
       screen.stopStreaming();
       lastGeneratedText = responseLines.join("\n").trimEnd();
+      void saveHistory(projectPath, activeHistoryId, session.getMessages()).catch((err: unknown) => {
+        baseIO.notify("warn", `failed to save history: ${getErrorMessage(err)}`);
+      });
 
       syncHintState(session, replState);
       refreshSessionState();
