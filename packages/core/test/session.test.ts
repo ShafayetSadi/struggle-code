@@ -385,6 +385,63 @@ describe("coding agent session", () => {
     expect(session.state.modePhase).toBe("idle");
   });
 
+  it("bypasses guided planning for simple single-file tasks", async () => {
+    MockAgentClass.events = [
+      {
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "Created src/todo.md." }],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+      },
+      {
+        type: "turn_end",
+        message: {
+          role: "assistant",
+          content: [],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+        toolResults: [],
+      },
+    ];
+
+    const io = new MemoryIO();
+    const session = await startSession("/tmp/project", io);
+    const chunks = await collectChunks(session.sendMessage("create src/todo.md"));
+
+    expect(chunks).toEqual([{ kind: "text", value: "Created src/todo.md.\n" }]);
+    expect(chunks.some((chunk) => chunk.kind === "text" && chunk.value.includes("Guided mode is mapping"))).toBe(false);
+    expect(MockAgentClass.instances[0]?.messages).toHaveLength(1);
+    expect(MockAgentClass.instances[0]?.messages[0]).toContain("Simple task triage result");
+    expect(MockAgentClass.instances[0]?.messages[0]).toContain("create src/todo.md");
+    expect(session.state.modePhase).toBe("idle");
+  });
+
   it("streams assistant text updates before the final message ends", async () => {
     MockAgentClass.events = [
       {
@@ -634,6 +691,68 @@ describe("coding agent session", () => {
     );
     expect(MockAgentClass.instances[0]?.messages).toHaveLength(0);
     expect(session.state.modePhase).toBe("awaiting-validation");
+  });
+
+  it("bypasses socratic planning for simple single-file tasks", async () => {
+    MockAgentClass.events = [
+      {
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "Deleted docs/tmp.md." }],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+      },
+      {
+        type: "turn_end",
+        message: {
+          role: "assistant",
+          content: [],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+        toolResults: [],
+      },
+    ];
+
+    const io = new MemoryIO();
+    const session = await startSession("/tmp/project", io);
+    session.setMode("socratic");
+    const chunks = await collectChunks(session.sendMessage("delete docs/tmp.md"));
+
+    expect(chunks).toEqual([{ kind: "text", value: "Deleted docs/tmp.md.\n" }]);
+    expect(
+      chunks.some(
+        (chunk) => chunk.kind === "text" && chunk.value.includes("Socratic mode is mapping the work before any coding starts.")
+      )
+    ).toBe(false);
+    expect(MockAgentClass.instances[0]?.messages).toHaveLength(1);
+    expect(MockAgentClass.instances[0]?.messages[0]).toContain("Simple task triage result");
+    expect(MockAgentClass.instances[0]?.messages[0]).toContain("delete docs/tmp.md");
+    expect(session.state.modePhase).toBe("idle");
   });
 
   it("getMessages returns an empty array before any exchange", async () => {
