@@ -7,6 +7,7 @@ import {
   type IO,
   type Provider,
   type ProviderConfig,
+  type ResponseChunk,
   startSession,
 } from "@struggle-ai/core";
 
@@ -114,6 +115,30 @@ function isModelUnavailableMessage(message: string): boolean {
   return /no longer available|model .* not available|please switch/i.test(message.toLowerCase());
 }
 
+const ANSI_CSI_PATTERN = /\u001B\[[0-?]*[ -/]*[@-~]/g;
+const ANSI_OSC_PATTERN = /\u001B\][^\u0007]*(?:\u0007|\u001B\\)/g;
+
+function stripAnsiSequences(text: string): string {
+  return text.replace(ANSI_OSC_PATTERN, "").replace(ANSI_CSI_PATTERN, "");
+}
+
+function chunkToCopyText(chunk: ResponseChunk): string {
+  switch (chunk.kind) {
+    case "text":
+      return chunk.value;
+    case "code":
+      return `\n\`\`\`${chunk.language}\n${chunk.value}\n\`\`\`\n`;
+    case "question":
+      return `${chunk.text}\n`;
+    case "adr":
+      return `${chunk.adr.title}\n${chunk.adr.context}\n${chunk.adr.decision}\n${chunk.adr.consequences}\n`;
+    case "checkpoint":
+      return `checkpoint · ${chunk.kind2}\n`;
+    case "sub_problem":
+      return `${chunk.subProblem.description}\n${chunk.subProblem.questions.join("\n")}\n`;
+  }
+}
+
 function formatSavedAt(value: string): string {
   const parsed = Date.parse(value);
   if (Number.isNaN(parsed)) {
@@ -160,6 +185,22 @@ function appendRestoredTranscript(screen: ReplScreen, messages: AgentMessage[] |
 
     screen.append(message.role === "user" ? "user" : "assistant", ...lines);
   }
+}
+
+function getLatestAssistantText(messages: AgentMessage[]): string | undefined {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (!message || message.role !== "assistant") {
+      continue;
+    }
+
+    const lines = extractMessageText(message);
+    if (lines.length > 0) {
+      return lines.join("\n\n").trim();
+    }
+  }
+
+  return undefined;
 }
 
 async function buildResumeListing(projectPath: string): Promise<string[]> {
@@ -426,12 +467,19 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
 
         process.stdout.write(chalk.hex(P.textMuted)("  working...\r"));
         const responseLines: string[] = [];
+        let responseCopyText = "";
         await streamChunks(session.sendMessage(trimmed), (chunk) => {
           const lines = formatChunk(chunk);
           responseLines.push(...lines);
+          responseCopyText += chunkToCopyText(chunk);
           for (const line of lines) process.stdout.write(`${line}\n`);
         });
-        lastGeneratedText = responseLines.join("\n").trimEnd();
+        const latestAssistantText = getLatestAssistantText(session.getMessages());
+        lastGeneratedText =
+          latestAssistantText ??
+          (responseCopyText.trim().length > 0
+            ? responseCopyText.trimEnd()
+            : stripAnsiSequences(responseLines.join("\n")).trimEnd());
         void saveHistory(projectPath, activeHistoryId, session.getMessages()).catch((err: unknown) => {
           io.notify("warn", `failed to save history: ${getErrorMessage(err)}`);
         });
@@ -886,6 +934,7 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
 
       let firstChunk = true;
       const responseLines: string[] = [];
+      let responseCopyText = "";
       await streamChunks(session.sendMessage(trimmed), (chunk) => {
         if (firstChunk) {
           firstChunk = false;
@@ -895,6 +944,7 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
 
         const chunkLines = formatChunk(chunk);
         responseLines.push(...chunkLines);
+        responseCopyText += chunkToCopyText(chunk);
         screen.appendStreamChunk(chunkLines.join("\n"));
         tui.requestRender();
       });
@@ -903,7 +953,12 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
         screen.stopThinking();
       }
       screen.stopStreaming();
-      lastGeneratedText = responseLines.join("\n").trimEnd();
+      const latestAssistantText = getLatestAssistantText(session.getMessages());
+      lastGeneratedText =
+        latestAssistantText ??
+        (responseCopyText.trim().length > 0
+          ? responseCopyText.trimEnd()
+          : stripAnsiSequences(responseLines.join("\n")).trimEnd());
       void saveHistory(projectPath, activeHistoryId, session.getMessages()).catch((err: unknown) => {
         baseIO.notify("warn", `failed to save history: ${getErrorMessage(err)}`);
       });
