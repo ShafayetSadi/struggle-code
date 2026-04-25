@@ -44,3 +44,8 @@ Desktop.ini
 .pi-lens
 cache-docs/
 %TEMP%/
+
+.claude
+.struggle-ai
+.vscode
+.codex

@@ -6,7 +6,7 @@ import { chalk, P } from "./palette.js";
 
 const TOP_LEVEL_ITEMS: SelectItem[] = [
   { value: "/help", label: "/help", description: "Show all available commands" },
-  { value: "/login", label: "/login", description: "Show available OAuth login providers" },
+  { value: "/login", label: "/login", description: "Open provider login selector" },
   { value: "/providers", label: "/providers", description: "Show providers or switch the active provider" },
   { value: "/logout", label: "/logout", description: "Clear saved credentials for the active provider" },
   { value: "/mode ", label: "/mode", description: "Switch learning mode" },
@@ -25,39 +25,6 @@ const MODE_ITEMS: SelectItem[] = [
   { value: "/mode guided", label: "/mode guided", description: "Guided - step-by-step questions" },
   { value: "/mode standard", label: "/mode standard", description: "Standard - balanced responses" },
   { value: "/mode socratic", label: "/mode socratic", description: "Socratic - questions only" },
-];
-
-const LOGIN_ITEMS: SelectItem[] = [
-  {
-    value: "/login anthropic",
-    label: "/login anthropic",
-    description: "Save an Anthropic API key",
-  },
-  {
-    value: "/login google",
-    label: "/login google",
-    description: "Save a Google Gemini API key",
-  },
-  {
-    value: "/login openai",
-    label: "/login openai",
-    description: "Save an OpenAI API key",
-  },
-  {
-    value: "/login openrouter",
-    label: "/login openrouter",
-    description: "Save an OpenRouter API key",
-  },
-  {
-    value: "/login google-antigravity",
-    label: "/login google-antigravity",
-    description: "Authenticate with Google Antigravity",
-  },
-  {
-    value: "/login openai-codex",
-    label: "/login openai-codex",
-    description: "Authenticate with OpenAI Codex",
-  },
 ];
 
 const PROVIDER_LABELS: Record<Provider, string> = {
@@ -84,7 +51,7 @@ export function setAvailableProviders(providers: Provider[]): void {
 }
 
 function getAllItems(): SelectItem[] {
-  return [...TOP_LEVEL_ITEMS, ...LOGIN_ITEMS, ...providerItems];
+  return [...TOP_LEVEL_ITEMS];
 }
 
 type MenuContext = "root" | "help" | "login" | "providers" | "mode" | "search";
@@ -106,9 +73,9 @@ function itemsForContext(context: MenuContext, query: string): SelectItem[] {
     case "help":
       return TOP_LEVEL_ITEMS;
     case "login":
-      return LOGIN_ITEMS;
+      return [];
     case "providers":
-      return providerItems;
+      return [];
     case "mode":
       return [];
     case "search": {

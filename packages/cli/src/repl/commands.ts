@@ -9,7 +9,7 @@ import type { ReplState, SlashCommand } from "./types.js";
 export const ROOT_MENU_TEXT = `
 Commands:
   /help                     Show all available commands
-  /login [provider]         Show providers or authenticate one directly
+  /login                    Open provider login selector
   /providers [provider]     Show providers or switch the active provider
   /logout                   Clear saved credentials for the active provider
   /mode                     Show available learning modes

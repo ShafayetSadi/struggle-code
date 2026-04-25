@@ -39,8 +39,10 @@ import {
 import { chalk, formatChunk, formatPrompt, P } from "./repl/formatting.js";
 import { createTuiIO } from "./repl/io.js";
 import { ModeMenu } from "./repl/modeMenu.js";
+import { LoginMenu } from "./repl/loginMenu.js";
 import { LoginOverlay } from "./repl/loginOverlay.js";
 import { ModelMenu } from "./repl/modelMenu.js";
+import { ProviderMenu } from "./repl/providerMenu.js";
 import { ResumeMenu } from "./repl/resumeMenu.js";
 import { ReplScreen } from "./repl/screen.js";
 import type { ReplState, SlashCommand } from "./repl/types.js";
@@ -109,6 +111,13 @@ function requiresOAuthLogin(config: ProviderConfig): boolean {
 
 function oauthRecoveryLines(provider: string): string[] {
   return [`Missing account login for ${provider}.`, "Run: /login", `Or: struggle config login ${provider}`];
+}
+
+function formatProviderModelLabel(config: ProviderConfig): string {
+  if (requiresOAuthLogin(config)) {
+    return `${config.provider} (login required)`;
+  }
+  return `${config.provider}/${config.model}`;
 }
 
 function isModelUnavailableMessage(message: string): boolean {
@@ -231,6 +240,14 @@ function formatResumeMenuItems(
   }));
 }
 
+function formatProviderMenuItems(providers: Provider[], currentProvider: Provider): Array<{ value: string; label: string; description?: string }> {
+  return providers.map((provider) => ({
+    value: provider,
+    label: provider,
+    ...(provider === currentProvider ? { description: "current" } : {}),
+  }));
+}
+
 async function resolveResumeTarget(projectPath: string, historyId?: string): Promise<HistoryNotice> {
   if (!historyId) {
     return {
@@ -310,9 +327,32 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
   const handleLogoutCommand = async (): Promise<string[]> => {
     const provider = currentConfig.provider;
     await clearSavedAuth(provider);
+
+    const authenticatedProviders = await listAuthenticatedProviders();
+    setAvailableProviders(authenticatedProviders);
+
+    const fallbackProvider = authenticatedProviders[0];
+    if (fallbackProvider && fallbackProvider !== provider) {
+      currentConfig = await getConfigForProvider(fallbackProvider);
+      session.setProviderConfig(currentConfig);
+      await writeConfigFile(CONFIG_PATH, currentConfig);
+      return [
+        `logged out from ${provider}`,
+        `active provider set to ${currentConfig.provider}/${currentConfig.model}`,
+      ];
+    }
+
     currentConfig = stripRuntimeAuth(currentConfig);
     session.setProviderConfig(currentConfig);
-    setAvailableProviders(await listAuthenticatedProviders());
+
+    if (requiresOAuthLogin(currentConfig)) {
+      return [
+        `logged out from ${provider}`,
+        "no logged-in providers available",
+        "run /login to authenticate a provider",
+      ];
+    }
+
     return [`logged out from ${provider}`];
   };
 
@@ -550,7 +590,7 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
   const screen = new ReplScreen(
     session.state.mode,
     projectPath,
-    `${currentConfig.provider}/${currentConfig.model}`,
+    formatProviderModelLabel(currentConfig),
     (value) => {
       void submitValue(value);
     }
@@ -582,9 +622,34 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
   const handleLogoutCommand = async (): Promise<string[]> => {
     const provider = currentConfig.provider;
     await clearSavedAuth(provider);
+
+    const authenticatedProviders = await listAuthenticatedProviders();
+    setAvailableProviders(authenticatedProviders);
+
+    const fallbackProvider = authenticatedProviders[0];
+    if (fallbackProvider && fallbackProvider !== provider) {
+      currentConfig = await getConfigForProvider(fallbackProvider);
+      session.setProviderConfig(currentConfig);
+      await writeConfigFile(CONFIG_PATH, currentConfig);
+      refreshSessionState();
+      return [
+        `logged out from ${provider}`,
+        `active provider set to ${currentConfig.provider}/${currentConfig.model}`,
+      ];
+    }
+
     currentConfig = stripRuntimeAuth(currentConfig);
     session.setProviderConfig(currentConfig);
-    setAvailableProviders(await listAuthenticatedProviders());
+    refreshSessionState();
+
+    if (requiresOAuthLogin(currentConfig)) {
+      return [
+        `logged out from ${provider}`,
+        "no logged-in providers available",
+        "run /login to authenticate a provider",
+      ];
+    }
+
     return [`logged out from ${provider}`];
   };
 
@@ -665,8 +730,75 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
     resolveExit?.();
   };
 
+  let loginMenuOpen = false;
+  let providerMenuOpen = false;
   let modeMenuOpen = false;
   let modelMenuOpen = false;
+
+  const openLoginMenu = () => {
+    if (loginMenuOpen) return;
+    loginMenuOpen = true;
+
+    const overlay = tui.showOverlay(
+      new LoginMenu(
+        (item) => {
+          overlay.hide();
+          loginMenuOpen = false;
+          tui.setFocus(screen);
+          void submitValue(`/login ${item.value}`);
+        },
+        () => {
+          overlay.hide();
+          loginMenuOpen = false;
+          tui.setFocus(screen);
+          tui.requestRender();
+        }
+      ),
+      {
+        width: "100%",
+        minWidth: 64,
+        maxHeight: 14,
+        anchor: "bottom-center",
+      }
+    );
+  };
+
+  const openProviderMenu = async () => {
+    if (providerMenuOpen) return;
+
+    const providers = await listAuthenticatedProviders();
+    if (providers.length === 0) {
+      screen.append("system", "no logged-in providers available");
+      screen.append("system", "run /login to authenticate a provider");
+      return;
+    }
+
+    providerMenuOpen = true;
+    const overlay = tui.showOverlay(
+      new ProviderMenu(
+        formatProviderMenuItems(providers, currentConfig.provider),
+        currentConfig.provider,
+        (item) => {
+          overlay.hide();
+          providerMenuOpen = false;
+          tui.setFocus(screen);
+          void submitValue(`/providers ${item.value}`);
+        },
+        () => {
+          overlay.hide();
+          providerMenuOpen = false;
+          tui.setFocus(screen);
+          tui.requestRender();
+        }
+      ),
+      {
+        width: "100%",
+        minWidth: 64,
+        maxHeight: 14,
+        anchor: "bottom-center",
+      }
+    );
+  };
 
   const openModeMenu = () => {
     if (modeMenuOpen) return;
@@ -774,7 +906,7 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
   const refreshSessionState = () => {
     screen.setMode(session.state.mode);
     screen.setActiveSubProblem(session.state.activeSubProblem);
-    screen.setModelLabel(`${currentConfig.provider}/${currentConfig.model}`);
+    screen.setModelLabel(formatProviderModelLabel(currentConfig));
     screen.invalidate();
     tui.requestRender();
   };
@@ -803,13 +935,11 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
           return;
         }
         if (command.kind === "login" && !("provider" in command && command.provider)) {
-          screen.setInputValue("/login ");
-          tui.requestRender();
+          openLoginMenu();
           return;
         }
         if (command.kind === "providers-menu") {
-          screen.setInputValue("/providers ");
-          tui.requestRender();
+          await openProviderMenu();
           return;
         }
         if (command.kind === "mode-menu") {
