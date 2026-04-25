@@ -12,6 +12,7 @@ import {
   writeConfigFile,
 } from "./configStore.js";
 import { cliIO } from "./ioImpl.js";
+import { loadHistory, saveHistory } from "./historyStore.js";
 import { runProviderLogin } from "./oauthLogin.js";
 import { Key, ProcessTerminal, TUI } from "./pi-tui/src/index.js";
 import { openUrlInBrowser } from "./repl/browser.js";
@@ -115,7 +116,8 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
   const projectPath = options.projectPath ?? process.cwd();
   const io = options.io ?? cliIO;
   let currentConfig = options.config ?? DEFAULT_CONFIGS.anthropic;
-  let session = await startSession(projectPath, io, currentConfig);
+  const initialMessages = options.resume ? (await loadHistory(projectPath)) ?? undefined : undefined;
+  let session = await startSession(projectPath, io, currentConfig, initialMessages);
   setAvailableProviders(await listAuthenticatedProviders());
   let lastGeneratedText: string | undefined;
   const replState: ReplState = {
@@ -196,6 +198,13 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
 
   process.stdout.write(chalk.hex(P.textPrimary).bold("Struggle AI") + chalk.hex(P.textMuted)("  interactive\n"));
   process.stdout.write(chalk.hex(P.textMuted)(`${COMMAND_HINT}\n\n`));
+  if (options.resume) {
+    if (initialMessages) {
+      process.stdout.write(chalk.hex(P.textMuted)(`resumed ${initialMessages.length} messages from last session\n\n`));
+    } else {
+      process.stdout.write(chalk.hex(P.textMuted)("no saved history for this project — starting fresh\n\n"));
+    }
+  }
 
   try {
     while (true) {
@@ -230,6 +239,19 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
             replState.hintLevel = 1;
             replState.lastMilestone = session.state.activeMilestone;
             process.stdout.write(chalk.hex(P.green)("started a fresh session\n"));
+            process.stdout.write(chalk.hex(P.textMuted)(`${COMMAND_HINT}\n`));
+            continue;
+          }
+          if (command.kind === "resume") {
+            const resumedMessages = (await loadHistory(projectPath)) ?? undefined;
+            session = await startSession(projectPath, io, currentConfig, resumedMessages);
+            replState.hintLevel = 1;
+            replState.lastMilestone = session.state.activeMilestone;
+            if (resumedMessages) {
+              process.stdout.write(chalk.hex(P.green)(`resumed ${resumedMessages.length} messages from last session\n`));
+            } else {
+              process.stdout.write(chalk.hex(P.textMuted)("no saved history for this project — starting fresh\n"));
+            }
             process.stdout.write(chalk.hex(P.textMuted)(`${COMMAND_HINT}\n`));
             continue;
           }
@@ -277,6 +299,7 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
           for (const line of lines) process.stdout.write(`${line}\n`);
         });
         lastGeneratedText = responseLines.join("\n").trimEnd();
+        void saveHistory(projectPath, session.getMessages());
         syncHintState(session, replState);
         process.stdout.write("\n");
       } catch (error) {
@@ -320,7 +343,8 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
   };
 
   const io = createTuiIO(baseIO, writeLine);
-  let session = await startSession(projectPath, io, currentConfig);
+  const initialMessages = options.resume ? (await loadHistory(projectPath)) ?? undefined : undefined;
+  let session = await startSession(projectPath, io, currentConfig, initialMessages);
   setAvailableProviders(await listAuthenticatedProviders());
   let lastGeneratedText: string | undefined;
   const replState: ReplState = {
@@ -434,6 +458,13 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
 
   for (const line of pending.splice(0)) screen.append("system", line);
   screen.append("system", COMMAND_HINT);
+  if (options.resume) {
+    if (initialMessages) {
+      screen.append("system", `resumed ${initialMessages.length} messages from last session`);
+    } else {
+      screen.append("system", "no saved history for this project — starting fresh");
+    }
+  }
 
   tui.addChild(screen);
   tui.setFocus(screen);
@@ -563,6 +594,21 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
           screen.append("system", COMMAND_HINT);
           return;
         }
+        if (command.kind === "resume") {
+          screen.clearEntries();
+          const resumedMessages = (await loadHistory(projectPath)) ?? undefined;
+          session = await startSession(projectPath, io, currentConfig, resumedMessages);
+          replState.hintLevel = 1;
+          replState.lastMilestone = session.state.activeMilestone;
+          screen.setMode(session.state.mode);
+          screen.setActiveSubProblem(session.state.activeSubProblem);
+          const notice = resumedMessages
+            ? `resumed ${resumedMessages.length} messages from last session`
+            : "no saved history for this project — starting fresh";
+          screen.append("system", notice);
+          screen.append("system", COMMAND_HINT);
+          return;
+        }
 
         const commandOutput: string[] = [];
         const trackedWriteLine = (line: string) => {
@@ -633,6 +679,7 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
       }
       screen.stopStreaming();
       lastGeneratedText = responseLines.join("\n").trimEnd();
+      void saveHistory(projectPath, session.getMessages());
 
       syncHintState(session, replState);
       refreshSessionState();
