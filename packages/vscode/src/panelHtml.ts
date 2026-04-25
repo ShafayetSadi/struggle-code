@@ -144,7 +144,7 @@ export function getPanelHtml(): string {
         gap: 12px;
       }
 
-      .robot-icon { width: 60px; height: 60px; margin-bottom: 8px; }
+      .robot-icon { width: 76px; height: 80px; margin-bottom: 12px; }
 
       .welcome-title {
         font-size: 19px;
@@ -546,17 +546,81 @@ export function getPanelHtml(): string {
 
       <!-- Welcome state -->
       <div class="welcome" id="welcome-state">
-        <svg class="robot-icon" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="17" y="23" width="30" height="26" rx="4" fill="#0f1f14" stroke="#3ddc84" stroke-width="1.5"/>
-          <rect x="25" y="31" width="5" height="5" rx="1" fill="#3ddc84" opacity="0.95"/>
-          <rect x="34" y="31" width="5" height="5" rx="1" fill="#3ddc84" opacity="0.95"/>
-          <path d="M26 42h12" stroke="#3ddc84" stroke-width="1.5" stroke-linecap="round" opacity="0.55"/>
-          <rect x="28" y="15" width="8" height="10" rx="2" fill="#0f1f14" stroke="#3ddc84" stroke-width="1.5"/>
-          <circle cx="32" cy="13.5" r="2.5" fill="#3ddc84"/>
-          <rect x="11" y="29" width="6" height="11" rx="2" fill="#0f1f14" stroke="#3ddc84" stroke-width="1.5"/>
-          <rect x="47" y="29" width="6" height="11" rx="2" fill="#0f1f14" stroke="#3ddc84" stroke-width="1.5"/>
-          <rect x="22" y="49" width="6" height="8" rx="2" fill="#0f1f14" stroke="#3ddc84" stroke-width="1.5"/>
-          <rect x="36" y="49" width="6" height="8" rx="2" fill="#0f1f14" stroke="#3ddc84" stroke-width="1.5"/>
+        <!-- Low-poly geometric face logo -->
+        <svg class="robot-icon" viewBox="45 40 410 430" fill="none" stroke="#3ddc84" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" xmlns="http://www.w3.org/2000/svg">
+          <!-- Head top -->
+          <polygon points="250,50 157,90 250,120"/>
+          <polygon points="250,50 250,120 343,90"/>
+          <!-- Upper left -->
+          <polygon points="157,90 102,195 175,158"/>
+          <polygon points="157,90 175,158 250,120"/>
+          <!-- Upper right -->
+          <polygon points="343,90 250,120 325,158"/>
+          <polygon points="343,90 325,158 398,195"/>
+          <!-- Forehead left -->
+          <polygon points="102,195 148,215 175,158"/>
+          <polygon points="175,158 148,215 250,205"/>
+          <polygon points="250,120 175,158 250,205"/>
+          <!-- Forehead right -->
+          <polygon points="250,120 250,205 325,158"/>
+          <polygon points="325,158 250,205 352,215"/>
+          <polygon points="398,195 325,158 352,215"/>
+          <!-- Eye region left -->
+          <polygon points="102,195 90,270 148,215"/>
+          <polygon points="90,270 145,292 148,215"/>
+          <polygon points="148,215 145,292 210,248"/>
+          <polygon points="148,215 210,248 250,205"/>
+          <!-- Center face between eyes -->
+          <polygon points="250,205 210,248 290,248"/>
+          <!-- Eye region right -->
+          <polygon points="398,195 352,215 410,270"/>
+          <polygon points="410,270 352,215 355,292"/>
+          <polygon points="352,215 290,248 355,292"/>
+          <polygon points="352,215 250,205 290,248"/>
+          <!-- Nose left -->
+          <polygon points="90,270 123,345 145,292"/>
+          <polygon points="145,292 123,345 215,305"/>
+          <polygon points="145,292 210,248 215,305"/>
+          <polygon points="210,248 250,305 215,305"/>
+          <!-- Nose bridge -->
+          <polygon points="210,248 290,248 250,305"/>
+          <!-- Nose right -->
+          <polygon points="290,248 285,305 250,305"/>
+          <polygon points="355,292 290,248 285,305"/>
+          <polygon points="410,270 377,345 355,292"/>
+          <polygon points="355,292 377,345 285,305"/>
+          <!-- Nose tip -->
+          <polygon points="215,305 285,305 250,330"/>
+          <!-- Lower face left -->
+          <polygon points="123,345 180,358 215,305"/>
+          <!-- Lower face right -->
+          <polygon points="377,345 285,305 320,358"/>
+          <!-- Philtrum and mouth left -->
+          <polygon points="215,305 250,330 250,348"/>
+          <polygon points="215,305 250,348 180,358"/>
+          <!-- Philtrum and mouth right -->
+          <polygon points="285,305 250,330 250,348"/>
+          <polygon points="285,305 250,348 320,358"/>
+          <!-- Beard left -->
+          <polygon points="123,345 180,358 190,395"/>
+          <polygon points="180,358 250,428 190,395"/>
+          <polygon points="180,358 250,348 250,428"/>
+          <!-- Beard right -->
+          <polygon points="377,345 320,358 310,395"/>
+          <polygon points="320,358 310,395 250,428"/>
+          <polygon points="320,358 250,348 250,428"/>
+          <!-- Left shoulder outer -->
+          <polygon points="123,345 55,460 145,460"/>
+          <!-- Left shoulder inner -->
+          <polygon points="123,345 145,460 190,395"/>
+          <polygon points="190,395 145,460 250,428"/>
+          <!-- Neck base -->
+          <polygon points="250,428 145,460 355,460"/>
+          <!-- Right shoulder inner -->
+          <polygon points="250,428 355,460 310,395"/>
+          <polygon points="310,395 355,460 377,345"/>
+          <!-- Right shoulder outer -->
+          <polygon points="377,345 355,460 445,460"/>
         </svg>
         <h1 class="welcome-title">Think before you build.</h1>
         <p class="welcome-sub">Ask a question or use <span class="cmd">/help</span> to get started</p>
