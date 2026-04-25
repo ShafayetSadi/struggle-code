@@ -10,7 +10,6 @@ export type SlashCommand =
   | { kind: "help" }
   | { kind: "mode-menu" }
   | { kind: "providers-menu" }
-  | { kind: "model" }
   | { kind: "copy" }
   | { kind: "clear" }
   | { kind: "new" }

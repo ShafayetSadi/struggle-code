@@ -1,5 +1,6 @@
 import { basename, join } from "node:path";
 
+import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import { generateADR } from "../artifacts/adr.js";
 import { renderTrailMarkdown } from "../artifacts/trail.js";
 import { DEFAULT_CONFIGS } from "../config.js";
@@ -770,6 +771,9 @@ export async function createSessionEngine(projectPath: string, io: IO, config?: 
     },
     getADRs() {
       return [...adrs];
+    },
+    getMessages(): AgentMessage[] {
+      return [];
     },
   };
 }

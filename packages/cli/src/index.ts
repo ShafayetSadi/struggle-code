@@ -69,7 +69,7 @@ export function createProgram(): Command {
         projectPath: options.project,
         io: cliIO,
         config: configValue,
-        resume: options.resume,
+        resume: options.resume ?? false,
       });
     });
 
@@ -163,7 +163,7 @@ export function createProgram(): Command {
         projectPath: options.project,
         io: cliIO,
         config: configValue,
-        resume: options.resume,
+        resume: options.resume ?? false,
       });
     });
 
