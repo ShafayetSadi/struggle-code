@@ -36,7 +36,6 @@ import {
   syncHintState,
 } from "./repl/commands.js";
 import { chalk, formatChunk, formatPrompt, P } from "./repl/formatting.js";
-import { HelpMenu } from "./repl/helpMenu.js";
 import { createTuiIO } from "./repl/io.js";
 import { ModeMenu } from "./repl/modeMenu.js";
 import { LoginOverlay } from "./repl/loginOverlay.js";
@@ -236,7 +235,6 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
   setAvailableProviders(await listAuthenticatedProviders());
   let lastGeneratedText: string | undefined;
   const replState: ReplState = {
-    hintLevel: 1,
     lastMilestone: session.state.activeMilestone,
   };
 
@@ -354,7 +352,6 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
           if (command.kind === "new") {
             session = await startSession(projectPath, io, currentConfig);
             activeHistoryId = session.state.id;
-            replState.hintLevel = 1;
             replState.lastMilestone = session.state.activeMilestone;
             process.stdout.write(chalk.hex(P.green)("started a fresh session\n"));
             process.stdout.write(chalk.hex(P.textMuted)(`${COMMAND_HINT}\n`));
@@ -382,7 +379,6 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
 
             session = await startSession(projectPath, io, currentConfig, resumedHistory.messages);
             activeHistoryId = resumedHistory.id;
-            replState.hintLevel = 1;
             replState.lastMilestone = session.state.activeMilestone;
             process.stdout.write(
               chalk.hex(P.green)(
@@ -492,7 +488,6 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
   setAvailableProviders(await listAuthenticatedProviders());
   let lastGeneratedText: string | undefined;
   const replState: ReplState = {
-    hintLevel: 1,
     lastMilestone: session.state.activeMilestone,
   };
 
@@ -600,7 +595,10 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
     return [`active provider set to ${provider}`, `current model ${currentConfig.provider}/${currentConfig.model}`];
   };
 
-  for (const line of pending.splice(0)) screen.append("system", line);
+  const startupLines = pending.splice(0);
+  if (startupLines.length > 0) {
+    screen.append("system", ...startupLines);
+  }
   screen.append("system", COMMAND_HINT);
   if (options.resume) {
     if (initialHistory && initialMessages && initialMessages.length > 0) {
@@ -619,37 +617,8 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
     resolveExit?.();
   };
 
-  let helpMenuOpen = false;
   let modeMenuOpen = false;
   let modelMenuOpen = false;
-
-  const openHelpMenu = () => {
-    if (helpMenuOpen) return;
-    helpMenuOpen = true;
-
-    const overlay = tui.showOverlay(
-      new HelpMenu(
-        (item) => {
-          overlay.hide();
-          helpMenuOpen = false;
-          tui.setFocus(screen);
-          void submitValue(item.value);
-        },
-        () => {
-          overlay.hide();
-          helpMenuOpen = false;
-          tui.setFocus(screen);
-          tui.requestRender();
-        }
-      ),
-      {
-        width: "100%",
-        minWidth: 50,
-        maxHeight: 11,
-        anchor: "bottom-center",
-      }
-    );
-  };
 
   const openModeMenu = () => {
     if (modeMenuOpen) return;
@@ -763,7 +732,10 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
   };
 
   const flushPending = () => {
-    for (const line of pending.splice(0)) screen.append("system", line);
+    const lines = pending.splice(0);
+    if (lines.length > 0) {
+      screen.append("system", ...lines);
+    }
   };
 
   const submitValue = async (value: string) => {
@@ -780,10 +752,6 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
         if (command.kind === "root-menu") {
           screen.setInputValue("/");
           tui.requestRender();
-          return;
-        }
-        if (command.kind === "help") {
-          openHelpMenu();
           return;
         }
         if (command.kind === "login" && !("provider" in command && command.provider)) {
@@ -828,7 +796,6 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
           screen.clearEntries();
           session = await startSession(projectPath, io, currentConfig);
           activeHistoryId = session.state.id;
-          replState.hintLevel = 1;
           replState.lastMilestone = session.state.activeMilestone;
           screen.setMode(session.state.mode);
           screen.setActiveSubProblem(session.state.activeSubProblem);
@@ -856,7 +823,6 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
           screen.clearEntries();
           session = await startSession(projectPath, io, currentConfig, resumedHistory.messages);
           activeHistoryId = resumedHistory.id;
-          replState.hintLevel = 1;
           replState.lastMilestone = session.state.activeMilestone;
           screen.setMode(session.state.mode);
           screen.setActiveSubProblem(session.state.activeSubProblem);

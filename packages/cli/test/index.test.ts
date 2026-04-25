@@ -35,7 +35,7 @@ describe("cli entry", () => {
     });
     expect(parseSlashCommand("/logout")).toEqual({ kind: "logout" });
     expect(parseSlashCommand("/share src/index.ts")).toEqual({ kind: "share", path: "src/index.ts" });
-    expect(parseSlashCommand("/hint 2")).toEqual({ kind: "hint", level: 2 });
+    expect(parseSlashCommand("/stuck")).toEqual({ kind: "stuck" });
     expect(parseSlashCommand("/trail export notes/trail.md --format pdf")).toEqual({
       kind: "trail-export",
       path: "notes/trail.md",
@@ -43,11 +43,16 @@ describe("cli entry", () => {
     });
     expect(parseSlashCommand("/resume")).toEqual({ kind: "resume" });
     expect(parseSlashCommand("/resume session-123")).toEqual({ kind: "resume", historyId: "session-123" });
+    expect(parseSlashCommand("/exit")).toEqual({ kind: "exit" });
+    expect(parseSlashCommand("/quit")).toEqual({ kind: "exit" });
   });
 
-  it("lists /resume in the root command menu", () => {
+  it("lists /stuck, /resume, and /quit in the root command menu", () => {
+    expect(ROOT_MENU_TEXT).toContain("/stuck");
+    expect(ROOT_MENU_TEXT).toContain("Trigger a stuck-session intervention");
     expect(ROOT_MENU_TEXT).toContain("/resume");
     expect(ROOT_MENU_TEXT).toContain("List saved sessions or resume one by id");
+    expect(ROOT_MENU_TEXT).toContain("/exit, /quit");
   });
 
   it("formats the prompt with the active mode", () => {

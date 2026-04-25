@@ -1,6 +1,6 @@
 {
   "name": "@struggle-ai/cli",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Struggle AI — a Socratic coding mentor CLI that guides you through problems with questions, not answers.",
   "author": "Struggle AI",
   "license": "MIT",

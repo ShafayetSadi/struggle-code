@@ -8,7 +8,7 @@ import type { ReplState, SlashCommand } from "./types.js";
 
 export const ROOT_MENU_TEXT = `
 Commands:
-  /help                     Hints & stuck commands
+  /help                     Show all available commands
   /login [provider]         Show providers or authenticate one directly
   /providers [provider]     Show providers or switch the active provider
   /logout                   Clear saved credentials for the active provider
@@ -19,8 +19,10 @@ Commands:
   /new                      Start a fresh session
   /resume [session-id]      List saved sessions or resume one by id
   /share <path>             Share a file with the active session
+  /stuck                    Trigger a stuck-session intervention
   /trail export [path] [--format md|pdf]
                             Export the learning trail
+  /exit, /quit              Close the session
 `.trim();
 
 export const LOGIN_MENU_TEXT = `
@@ -51,11 +53,7 @@ export function formatProvidersMenu(providers: string[]): string[] {
   return ["Available providers:", ...providers.map((provider) => `  /providers ${provider}`)];
 }
 
-export const HELP_TEXT = `
-Help commands:
-  /hint [1|2|3]             Ask for a hint; defaults to the next level
-  /stuck                    Trigger a stuck-session intervention
-`.trim();
+export const HELP_TEXT = ROOT_MENU_TEXT;
 
 export const MODE_MENU_TEXT = `
 Available modes:
@@ -63,13 +61,6 @@ Available modes:
   /mode standard            Balanced mode (default)
   /mode socratic            Questions only, no direct answers
 `.trim();
-
-function normalizeHintLevel(value: string | undefined): 1 | 2 | 3 | undefined {
-  if (value === "1" || value === "2" || value === "3") {
-    return Number(value) as 1 | 2 | 3;
-  }
-  return undefined;
-}
 
 export function parseSlashCommand(input: string): SlashCommand | undefined {
   const trimmed = input.trim();
@@ -113,10 +104,6 @@ export function parseSlashCommand(input: string): SlashCommand | undefined {
       return { kind: "share", path: args.join(" ") };
     case "stuck":
       return { kind: "stuck" };
-    case "hint": {
-      const level = normalizeHintLevel(args[0]);
-      return level === undefined ? { kind: "hint" } : { kind: "hint", level };
-    }
     case "trail": {
       if (args[0] !== "export") return { kind: "root-menu" };
       const path = args.find((v) => !v.startsWith("--") && v !== "export");
@@ -128,16 +115,9 @@ export function parseSlashCommand(input: string): SlashCommand | undefined {
   }
 }
 
-function nextHintLevel(current: 1 | 2 | 3): 1 | 2 | 3 {
-  if (current === 1) return 2;
-  if (current === 2) return 3;
-  return 3;
-}
-
 export function syncHintState(session: Session, state: ReplState): void {
   if (session.state.activeMilestone !== state.lastMilestone) {
     state.lastMilestone = session.state.activeMilestone;
-    state.hintLevel = 1;
   }
 }
 
@@ -213,13 +193,6 @@ export async function handleSlashCommand(
       await streamChunks(session.invokeStuck(), (chunk) => writeLines(formatChunk(chunk)));
       syncHintState(session, replState);
       return "continue";
-    case "hint": {
-      const level = command.level ?? replState.hintLevel;
-      await streamChunks(session.invokeHint(level), (chunk) => writeLines(formatChunk(chunk)));
-      replState.hintLevel = command.level ?? nextHintLevel(level);
-      syncHintState(session, replState);
-      return "continue";
-    }
     case "trail-export": {
       const outputPath = command.path
         ? resolve(projectPath, command.path)
