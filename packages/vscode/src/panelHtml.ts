@@ -9,416 +9,144 @@ export function getPanelHtml(): string {
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline';" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data:; script-src 'nonce-${nonce}'; style-src 'unsafe-inline';" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Struggle AI</title>
     <style>
       :root {
         color-scheme: dark;
-        --bg: #0d0d0d;
-        --panel: #111111;
-        --surface: #181818;
-        --surface-2: #1e1e1e;
-        --border: rgba(255,255,255,0.07);
-        --border-mid: rgba(255,255,255,0.12);
-        --text: #e2e2e2;
-        --muted: #888;
-        --muted-2: #555;
-        --accent: #3ddc84;
-        --accent-dim: rgba(61,220,132,0.12);
-        --accent-glow: rgba(61,220,132,0.08);
-        --user-bg: #1c1c1c;
-        --hint-color: #3ddc84;
-        --stuck-color: #e05555;
-        --system-bg: #13161d;
-        --system-border: rgba(100,140,220,0.18);
-        --error-bg: #180f0f;
-        --error-border: rgba(200,60,60,0.25);
-        font-family: ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+        --bg: #0e150e;
+        --topbar: #09090b;
+        --surface: #1a221a;
+        --surface-low: #161d16;
+        --surface-high: #242c24;
+        --surface-highest: #2f372e;
+        --border: #3d4a3d;
+        --text: #dce5d9;
+        --muted: #bccbb9;
+        --muted-2: #869585;
+        --accent: #4be277;
+        --accent-strong: #22c55e;
+        --error: #ffb4ab;
+        --error-weak: rgba(255, 180, 171, 0.12);
+        --shadow: 0 14px 28px rgba(0, 0, 0, 0.28);
+        font-family: Inter, "Segoe UI", ui-sans-serif, sans-serif;
         font-size: 14px;
         line-height: 1.5;
       }
-
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
       html, body {
         height: 100%;
         background: var(--bg);
         color: var(--text);
-        overflow: hidden;
-      }
-
-      body {
         display: flex;
         flex-direction: column;
-        height: 100vh;
+        overflow: hidden;
       }
-
-      /* ── HEADER ── */
       .header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 0 14px;
-        height: 42px;
-        border-bottom: 1px solid var(--border);
-        background: var(--panel);
+        height: 48px;
+        padding: 0 16px;
+        border-bottom: 1px solid #27272a;
+        background: var(--topbar);
         flex-shrink: 0;
-        gap: 8px;
       }
-
       .logo {
-        font-size: 11px;
+        font-size: 13px;
         font-weight: 700;
-        letter-spacing: 0.14em;
-        color: var(--text);
+        letter-spacing: 0.04em;
         text-transform: uppercase;
-        white-space: nowrap;
       }
-
       .header-right {
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: 8px;
       }
-
-      .mode-select {
+      .mode-wrap {
         display: flex;
         align-items: center;
+        gap: 8px;
         padding: 4px 10px;
-        border: 1px solid var(--border-mid);
+        background: #18181b;
+        border: 1px solid #27272a;
         border-radius: 20px;
-        background: var(--surface);
-        color: var(--text);
-        font-size: 12px;
-        font-weight: 500;
-        font-family: inherit;
-        cursor: pointer;
-        appearance: none;
-        outline: none;
-        transition: border-color 0.15s;
+        position: relative;
       }
-
-      .mode-select:hover, .mode-select:focus { border-color: var(--accent); }
-
-      .icon-btn {
-        display: flex;
+      .mode-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 999px;
+        background: var(--accent-strong);
+      }
+      .mode-select {
+        appearance: none;
+        border: 0;
+        outline: none;
+        background: transparent;
+        color: var(--text);
+        font: 600 11px/16px Inter, sans-serif;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+      .mode-select-hidden {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+        width: 1px;
+        height: 1px;
+      }
+      .mode-button {
+        display: inline-flex;
         align-items: center;
-        justify-content: center;
-        width: 28px;
-        height: 28px;
+        gap: 4px;
+        border: 0;
+        background: transparent;
+        color: var(--text);
+        font: 600 11px/16px Inter, sans-serif;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        cursor: pointer;
+        padding: 2px 0;
+      }
+      .mode-button svg { color: #9ca3af; }
+      .mode-menu {
+        position: absolute;
+        right: 0;
+        top: calc(100% + 6px);
+        display: none;
+        min-width: 180px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: #101710;
+        box-shadow: var(--shadow);
+        overflow: hidden;
+        z-index: 70;
+      }
+      .mode-menu.open { display: block; }
+      .mode-option {
+        width: 100%;
         border: 0;
         background: transparent;
         color: var(--muted);
-        cursor: pointer;
-        border-radius: 6px;
-        transition: color 0.15s, background 0.15s;
-      }
-
-      .icon-btn:hover { color: var(--text); background: var(--surface-2); }
-
-      /* ── STAGE ── */
-      .stage {
-        flex: 1;
-        min-height: 0;
-        overflow-y: auto;
-        overflow-x: hidden;
-        scrollbar-width: thin;
-        scrollbar-color: var(--surface-2) transparent;
-        position: relative;
-      }
-
-      .stage::-webkit-scrollbar { width: 4px; }
-      .stage::-webkit-scrollbar-track { background: transparent; }
-      .stage::-webkit-scrollbar-thumb { background: var(--surface-2); border-radius: 2px; }
-
-      /* ── WELCOME STATE ── */
-      .welcome {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        min-height: 100%;
-        padding: 32px 20px;
-        text-align: center;
-        gap: 12px;
-      }
-
-      .robot-icon { width: 76px; height: 80px; margin-bottom: 12px; }
-
-      .welcome-title {
-        font-size: 19px;
-        font-weight: 600;
-        color: var(--text);
-        letter-spacing: -0.01em;
-      }
-
-      .welcome-sub {
-        font-size: 13px;
-        color: var(--muted);
-      }
-
-      .welcome-sub .cmd {
-        color: var(--accent);
-        font-family: ui-monospace,monospace;
-        font-size: 12px;
-      }
-
-      .suggestion-cards {
-        display: flex;
-        gap: 10px;
-        margin-top: 10px;
-        flex-wrap: wrap;
-        justify-content: center;
-      }
-
-      .suggestion-card {
-        display: flex;
-        flex-direction: column;
-        gap: 5px;
-        padding: 14px 16px;
-        border: 1px solid var(--border-mid);
-        border-radius: 10px;
-        background: var(--surface);
-        cursor: pointer;
         text-align: left;
-        width: 152px;
-        transition: border-color 0.15s, background 0.15s;
-        font-family: inherit;
-        color: inherit;
-      }
-
-      .suggestion-card:hover {
-        border-color: var(--accent);
-        background: var(--accent-glow);
-      }
-
-      .card-icon {
-        font-size: 15px;
-        color: var(--accent);
-        margin-bottom: 2px;
-        font-family: ui-monospace, monospace;
-        font-weight: 600;
-      }
-
-      .card-title { font-size: 12px; font-weight: 600; color: var(--text); }
-      .card-sub { font-size: 11px; color: var(--muted); line-height: 1.4; }
-
-      /* ── STREAM / MESSAGES ── */
-      .stream {
-        display: flex;
-        flex-direction: column;
-        padding: 12px 0 8px;
-      }
-
-      .message { padding: 6px 18px; display: flex; flex-direction: column; }
-
-      .message.user { align-items: flex-end; }
-
-      .message.user .body {
-        background: var(--user-bg);
-        border: 1px solid rgba(255,255,255,0.09);
-        border-radius: 12px 2px 12px 12px;
-        padding: 9px 13px;
-        max-width: 78%;
-        font-size: 14px;
-        line-height: 1.6;
-        color: var(--text);
-        white-space: pre-wrap;
-        word-break: break-word;
-      }
-
-      .message.assistant { align-items: flex-start; }
-
-      .ai-label {
-        font-size: 10px;
-        font-weight: 700;
-        color: var(--accent);
-        letter-spacing: 0.1em;
+        font: 600 11px/16px Inter, sans-serif;
+        letter-spacing: 0.05em;
         text-transform: uppercase;
-        margin-bottom: 6px;
-        display: flex;
-        align-items: center;
-        gap: 3px;
-      }
-
-      .ai-label::after { content: "›"; font-size: 12px; }
-
-      .message.assistant .body {
-        font-size: 14px;
-        line-height: 1.75;
-        color: var(--text);
-        white-space: pre-wrap;
-        word-break: break-word;
-      }
-
-      .assistant-actions {
-        display: flex;
-        gap: 8px;
-        margin-top: 12px;
-      }
-
-      .action-btn {
-        padding: 3px 11px;
-        border-radius: 4px;
-        border: 1px solid;
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: 0.07em;
+        padding: 10px 12px;
         cursor: pointer;
-        background: transparent;
-        font-family: inherit;
-        transition: background 0.15s;
       }
-
-      .action-btn.hint { color: var(--hint-color); border-color: rgba(61,220,132,0.3); }
-      .action-btn.hint:hover { background: rgba(61,220,132,0.1); }
-      .action-btn.stuck { color: var(--stuck-color); border-color: rgba(224,85,85,0.3); }
-      .action-btn.stuck:hover { background: rgba(224,85,85,0.1); }
-
-      /* code blocks */
-      .code-block {
-        margin-top: 10px;
-        border: 1px solid var(--border-mid);
-        border-radius: 8px;
-        overflow: hidden;
-      }
-
-      .code-header {
-        display: flex;
-        align-items: center;
-        padding: 5px 12px;
-        background: var(--surface-2);
-        border-bottom: 1px solid var(--border);
-        font-size: 11px;
-        color: var(--muted);
-        font-family: ui-monospace, monospace;
-        gap: 6px;
-      }
-
-      .code-header-dot {
-        width: 6px; height: 6px; border-radius: 50%;
-        background: var(--border-mid);
-        flex-shrink: 0;
-      }
-
-      .code-body {
-        padding: 12px;
-        background: var(--surface);
-        font-family: ui-monospace,SFMono-Regular,Consolas,monospace;
-        font-size: 12.5px;
-        line-height: 1.6;
+      .mode-option:hover {
+        background: rgba(75, 226, 119, 0.08);
         color: var(--text);
-        overflow-x: auto;
-        white-space: pre;
       }
-
-      code {
-        border: 1px solid var(--border-mid);
-        border-radius: 4px;
-        background: var(--surface-2);
-        padding: 1px 5px;
-        font-family: ui-monospace,SFMono-Regular,Consolas,monospace;
-        font-size: 12.5px;
+      .mode-option.active {
+        background: rgba(75, 226, 119, 0.14);
+        color: var(--accent);
       }
-
-      .message.system { padding: 4px 18px; }
-      .message.system .body {
-        background: var(--system-bg);
-        border: 1px solid var(--system-border);
-        border-radius: 8px;
-        padding: 9px 13px;
-        font-size: 13px;
-        color: #a0b4e0;
-        white-space: pre-wrap;
-      }
-
-      .message.error .body {
-        background: var(--error-bg);
-        border: 1px solid var(--error-border);
-        border-radius: 8px;
-        padding: 9px 13px;
-        color: #e57373;
-        white-space: pre-wrap;
-      }
-
-      /* ── SLASH COMMAND POPUP ── */
-      .slash-popup {
-        position: absolute;
-        bottom: 0;
-        left: 16px;
-        right: 16px;
-        background: var(--surface);
-        border: 1px solid var(--border-mid);
-        border-radius: 10px;
-        overflow: hidden;
-        display: none;
-        z-index: 20;
-        box-shadow: 0 8px 28px rgba(0,0,0,0.6);
-        margin-bottom: 4px;
-      }
-
-      .slash-popup.open { display: block; }
-
-      .slash-popup-header {
-        padding: 6px 12px;
-        font-size: 9px;
-        font-weight: 700;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: var(--muted-2);
-        border-bottom: 1px solid var(--border);
-      }
-
-      .slash-cmd {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 8px 12px;
-        cursor: pointer;
-        transition: background 0.1s;
-      }
-
-      .slash-cmd:hover, .slash-cmd.active { background: var(--surface-2); }
-
-      .slash-cmd-icon {
-        width: 24px; height: 24px; border-radius: 6px;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 12px; font-weight: 700; flex-shrink: 0;
-      }
-
-      .slash-cmd-icon.green { background: rgba(61,220,132,0.15); color: var(--accent); }
-      .slash-cmd-icon.yellow { background: rgba(220,180,61,0.15); color: #dcc43d; }
-      .slash-cmd-icon.red { background: rgba(224,85,85,0.15); color: var(--stuck-color); }
-
-      .slash-cmd-info { flex: 1; min-width: 0; }
-      .slash-cmd-name { font-size: 12px; font-weight: 600; color: var(--text); }
-      .slash-cmd-desc { font-size: 11px; color: var(--muted); }
-
-      .slash-cmd-enter {
-        font-size: 10px;
-        padding: 2px 6px;
-        border: 1px solid var(--border-mid);
-        border-radius: 4px;
-        color: var(--muted-2);
-        flex-shrink: 0;
-      }
-
-      /* ── INPUT BAR ── */
-      .input-bar {
-        flex-shrink: 0;
-        border-top: 1px solid var(--border);
-        background: var(--surface);
-        padding: 10px 14px 10px;
-      }
-
-      .input-row {
-        display: flex;
-        align-items: flex-end;
-        gap: 8px;
-      }
-
-      .attach-btn {
+      .icon-btn {
         display: flex;
         align-items: center;
         justify-content: center;
@@ -426,264 +154,411 @@ export function getPanelHtml(): string {
         height: 30px;
         border: 0;
         background: transparent;
-        color: var(--muted);
+        color: #71717a;
         cursor: pointer;
         border-radius: 6px;
-        flex-shrink: 0;
-        transition: color 0.15s;
+        transition: color .15s, background .15s;
       }
-
-      .attach-btn:hover { color: var(--text); }
-
-      .composer-wrap { flex: 1; min-width: 0; }
-
-      .composer-input {
-        width: 100%;
-        border: 0;
-        outline: none;
-        resize: none;
-        background: transparent;
-        color: var(--text);
-        padding: 4px 0;
-        line-height: 1.5;
-        font-size: 14px;
-        font-family: inherit;
-        min-height: 24px;
-        max-height: 120px;
+      .icon-btn:hover { color: var(--text); background: #18181b; }
+      .stage {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
         overflow-y: auto;
-        display: block;
-        scrollbar-width: thin;
+        position: relative;
       }
-
-      .composer-input::placeholder { color: var(--muted-2); }
-
-      .send-button {
+      .welcome {
         display: flex;
+        flex-direction: column;
         align-items: center;
-        gap: 5px;
-        padding: 6px 14px;
-        border: 0;
-        border-radius: 8px;
-        background: var(--accent);
-        color: #0a0a0a;
+        justify-content: center;
+        min-height: calc(100vh - 180px);
+        padding: 24px;
+        text-align: center;
+        position: relative;
+      }
+      .welcome::before {
+        content: "";
+        position: absolute;
+        width: 500px;
+        height: 500px;
+        border-radius: 50%;
+        background: rgba(75, 226, 119, 0.10);
+        filter: blur(120px);
+        pointer-events: none;
+      }
+      .welcome-content {
+        position: relative;
+        z-index: 2;
+        max-width: 640px;
+      }
+      .robot-icon {
+        width: 80px;
+        height: 80px;
+        object-fit: contain;
+        filter: drop-shadow(0 0 12px rgba(75, 226, 119, 0.2));
+        margin-bottom: 24px;
+      }
+      .welcome-title {
+        font-size: 24px;
+        line-height: 32px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        margin-bottom: 4px;
+      }
+      .welcome-sub {
+        font-size: 14px;
+        line-height: 20px;
+        color: var(--muted);
+        opacity: .8;
+      }
+      .welcome-sub .cmd {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 6px;
+        background: rgba(75, 226, 119, 0.10);
+        color: var(--accent-strong);
+        font-family: ui-monospace, monospace;
         font-size: 12px;
-        font-weight: 700;
-        font-family: inherit;
-        cursor: pointer;
-        flex-shrink: 0;
-        letter-spacing: 0.03em;
-        transition: opacity 0.15s;
-        height: 30px;
       }
-
-      .send-button:disabled { opacity: 0.35; cursor: not-allowed; }
-      .send-button:hover:not(:disabled) { opacity: 0.88; }
-
-      .input-meta {
-        display: flex;
-        align-items: center;
+      .suggestion-cards {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 8px;
-        margin-top: 8px;
-        padding-left: 38px;
+        margin-top: 40px;
       }
-
-      .model-chip {
+      .suggestion-card {
+        text-align: left;
+        padding: 16px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--surface-low);
+        cursor: pointer;
+        color: var(--text);
+        transition: border-color .16s, background .16s;
+      }
+      .suggestion-card:hover { border-color: rgba(75, 226, 119, .5); }
+      .card-icon { display: block; color: var(--accent-strong); margin-bottom: 8px; font-size: 16px; }
+      .card-title { font-size: 11px; line-height: 16px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+      .card-sub { font-size: 13px; line-height: 18px; color: rgba(220,229,217,.65); }
+      .stream {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        width: 100%;
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 32px 24px 220px;
+      }
+      .message { display: flex; flex-direction: column; gap: 8px; }
+      .message.user { align-items: flex-end; }
+      .message.user .body {
+        background: var(--surface-low);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        max-width: 85%;
+        padding: 12px 20px;
+      }
+      .message.assistant { align-items: flex-start; }
+      .ai-label {
         display: inline-flex;
         align-items: center;
-        gap: 5px;
-        padding: 2px 9px;
-        border: 1px solid var(--border-mid);
-        border-radius: 20px;
+        gap: 8px;
+        color: var(--accent);
         font-size: 11px;
-        color: var(--muted);
-        cursor: pointer;
-        background: transparent;
-        font-family: inherit;
-        transition: border-color 0.15s, color 0.15s;
+        line-height: 16px;
+        font-weight: 600;
+        letter-spacing: .05em;
       }
-
-      .model-chip:hover { border-color: var(--accent); color: var(--accent); }
-
-      .context-badge {
+      .ai-label::before { content: "▣"; font-size: 14px; }
+      .message.assistant .body {
+        background: var(--surface-high);
+        border: 1px solid rgba(75, 226, 119, .2);
+        border-radius: 16px;
+        box-shadow: var(--shadow);
+        padding: 16px 20px;
+        width: min(100%, 760px);
+      }
+      .assistant-actions {
+        margin-top: 16px;
+        padding-top: 14px;
+        border-top: 1px solid rgba(134,149,133,.3);
+        display: flex;
+        gap: 10px;
+      }
+      .action-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 8px;
+        border: 1px solid;
+        padding: 8px 12px;
+        font: 600 11px/16px Inter, sans-serif;
+        letter-spacing: .05em;
+        text-transform: uppercase;
+        background: transparent;
+        cursor: pointer;
+      }
+      .action-btn.hint { color: #96d59d; border-color: rgba(150,213,157,.35); background: rgba(23,84,40,.20); }
+      .action-btn.stuck { color: var(--error); border-color: rgba(255,180,171,.25); background: var(--error-weak); }
+      .code-block {
+        margin-top: 16px;
+        border-radius: 12px;
+        border: 1px solid #27272a;
+        background: #09090b;
+        overflow: hidden;
+      }
+      .code-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 12px;
+        border-bottom: 1px solid #27272a;
+        font-family: ui-monospace, monospace;
+        font-size: 12px;
+        color: #a1a1aa;
+      }
+      .code-body {
+        padding: 14px;
+        overflow-x: auto;
+        font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+        font-size: 13px;
+        line-height: 20px;
+        white-space: pre;
+      }
+      .message.system .body, .message.error .body {
+        border-radius: 10px;
+        padding: 10px 12px;
+        font-size: 13px;
+        max-width: 760px;
+      }
+      .message.system .body { background: #101910; border: 1px solid #1f2f1f; color: #b2f2b7; }
+      .message.error .body { background: #1b1010; border: 1px solid rgba(255,180,171,.35); color: var(--error); }
+      .input-shell {
+        position: fixed;
+        left: 50%;
+        transform: translateX(-50%);
+        bottom: 0;
+        width: min(900px, calc(100vw - 32px));
+        background: transparent;
+        z-index: 40;
+        padding: 16px 0 10px;
+      }
+      .input-bar {
+        background: var(--surface-high);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 8px;
+        box-shadow: var(--shadow);
+      }
+      .input-row { display: flex; align-items: center; gap: 8px; padding: 0 6px; }
+      .attach-btn {
+        width: 28px;
+        height: 28px;
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      .attach-btn:hover { color: var(--accent); }
+      .composer-wrap { flex: 1; min-width: 0; }
+      .composer-input {
+        width: 100%;
+        min-height: 32px;
+        max-height: 120px;
+        resize: none;
+        border: 0;
+        outline: none;
+        background: transparent;
+        color: var(--text);
+        font: inherit;
+        padding: 6px 0;
+      }
+      .composer-input::placeholder { color: rgba(188,203,185,.5); }
+      .send-button {
+        border: 0;
+        border-radius: 10px;
+        background: var(--accent-strong);
+        color: #003915;
+        font: 600 11px/16px Inter, sans-serif;
+        letter-spacing: .05em;
+        text-transform: uppercase;
+        padding: 7px 12px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+      }
+      .send-button:disabled { opacity: .45; cursor: not-allowed; }
+      .input-meta {
+        font-size: 10px;
+        color: rgba(188,203,185,.45);
+        text-transform: uppercase;
+        letter-spacing: .1em;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 8px 2px;
+        border-top: 1px solid rgba(134,149,133,.3);
+        margin-top: 6px;
+      }
+      .model-chip {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface-low);
+        padding: 4px 8px;
+        cursor: pointer;
+        color: var(--muted);
+      }
+      .context-badge { display: none; }
+      .context-badge.visible { display: inline-block; }
+      .slash-popup {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        bottom: 164px;
+        width: min(540px, calc(100vw - 32px));
+        border-radius: 16px;
+        border: 1px solid var(--border);
+        background: var(--surface-highest);
+        overflow: hidden;
         display: none;
+        box-shadow: var(--shadow);
+        z-index: 45;
+      }
+      .slash-popup.open { display: block; }
+      .slash-popup-header {
+        padding: 8px 12px;
         font-size: 10px;
         font-weight: 700;
-        letter-spacing: 0.07em;
-        color: var(--muted-2);
+        color: #71717a;
+        letter-spacing: .12em;
         text-transform: uppercase;
-        padding: 2px 7px;
-        border: 1px solid var(--border);
-        border-radius: 4px;
-        white-space: nowrap;
+        border-bottom: 1px solid var(--border);
       }
-
-      .context-badge.visible { display: inline-block; }
+      .slash-cmd {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 14px;
+        cursor: pointer;
+        border-left: 4px solid transparent;
+      }
+      .slash-cmd:hover { background: rgba(75,226,119,.06); border-left-color: var(--accent-strong); }
+      .slash-cmd.active { background: rgba(75,226,119,.10); border-left-color: var(--accent-strong); }
+      .slash-cmd-icon {
+        width: 20px;
+        text-align: center;
+        color: #71717a;
+      }
+      .slash-cmd.active .slash-cmd-icon { color: var(--accent); }
+      .slash-cmd-info { flex: 1; min-width: 0; }
+      .slash-cmd-name { font-weight: 600; }
+      .slash-cmd-desc { font-size: 12px; color: #9ca3af; }
+      .slash-cmd-enter {
+        font-size: 10px;
+        padding: 2px 5px;
+        border: 1px solid #3f3f46;
+        border-radius: 4px;
+        color: #a1a1aa;
+      }
+      @media (max-width: 700px) {
+        .suggestion-cards { grid-template-columns: 1fr; }
+      }
     </style>
   </head>
   <body>
-
-    <!-- HEADER -->
     <header class="header">
       <span class="logo">Struggle AI</span>
       <div class="header-right">
-        <select class="mode-select" id="mode-select" aria-label="Session mode">
-          <option value="guided">Guided Mode</option>
-          <option value="standard">Standard Mode</option>
-          <option value="socratic">Socratic Mode</option>
-        </select>
+        <div class="mode-wrap">
+          <span class="mode-dot" aria-hidden="true"></span>
+          <button class="mode-button" id="mode-button" type="button" aria-label="Session mode">
+            <span id="mode-button-label">Guided Mode</span>
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <path d="M4 6l4 4 4-4H4z"/>
+            </svg>
+          </button>
+          <select class="mode-select mode-select-hidden" id="mode-select" aria-label="Session mode">
+            <option value="guided">Guided Mode</option>
+            <option value="standard">Standard Mode</option>
+            <option value="socratic">Socratic Mode</option>
+          </select>
+          <div class="mode-menu" id="mode-menu" role="menu" aria-label="Session modes">
+            <button class="mode-option" type="button" data-mode="guided">Guided Mode</button>
+            <button class="mode-option" type="button" data-mode="standard">Standard Mode</button>
+            <button class="mode-option" type="button" data-mode="socratic">Socratic Mode</button>
+          </div>
+        </div>
         <button class="icon-btn" id="settings-btn" title="More options" aria-label="More options">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-            <circle cx="8" cy="3" r="1.3"/>
-            <circle cx="8" cy="8" r="1.3"/>
-            <circle cx="8" cy="13" r="1.3"/>
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 3.2a1.2 1.2 0 110-2.4 1.2 1.2 0 010 2.4zm0 6a1.2 1.2 0 110-2.4 1.2 1.2 0 010 2.4zm0 6a1.2 1.2 0 110-2.4 1.2 1.2 0 010 2.4z"/>
           </svg>
         </button>
       </div>
     </header>
-
-    <!-- STAGE -->
     <div class="stage" id="stage">
-
-      <!-- Welcome state -->
       <div class="welcome" id="welcome-state">
-        <!-- Low-poly geometric face logo -->
-        <svg class="robot-icon" viewBox="45 40 410 430" fill="none" stroke="#3ddc84" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" xmlns="http://www.w3.org/2000/svg">
-          <!-- Head top -->
-          <polygon points="250,50 157,90 250,120"/>
-          <polygon points="250,50 250,120 343,90"/>
-          <!-- Upper left -->
-          <polygon points="157,90 102,195 175,158"/>
-          <polygon points="157,90 175,158 250,120"/>
-          <!-- Upper right -->
-          <polygon points="343,90 250,120 325,158"/>
-          <polygon points="343,90 325,158 398,195"/>
-          <!-- Forehead left -->
-          <polygon points="102,195 148,215 175,158"/>
-          <polygon points="175,158 148,215 250,205"/>
-          <polygon points="250,120 175,158 250,205"/>
-          <!-- Forehead right -->
-          <polygon points="250,120 250,205 325,158"/>
-          <polygon points="325,158 250,205 352,215"/>
-          <polygon points="398,195 325,158 352,215"/>
-          <!-- Eye region left -->
-          <polygon points="102,195 90,270 148,215"/>
-          <polygon points="90,270 145,292 148,215"/>
-          <polygon points="148,215 145,292 210,248"/>
-          <polygon points="148,215 210,248 250,205"/>
-          <!-- Center face between eyes -->
-          <polygon points="250,205 210,248 290,248"/>
-          <!-- Eye region right -->
-          <polygon points="398,195 352,215 410,270"/>
-          <polygon points="410,270 352,215 355,292"/>
-          <polygon points="352,215 290,248 355,292"/>
-          <polygon points="352,215 250,205 290,248"/>
-          <!-- Nose left -->
-          <polygon points="90,270 123,345 145,292"/>
-          <polygon points="145,292 123,345 215,305"/>
-          <polygon points="145,292 210,248 215,305"/>
-          <polygon points="210,248 250,305 215,305"/>
-          <!-- Nose bridge -->
-          <polygon points="210,248 290,248 250,305"/>
-          <!-- Nose right -->
-          <polygon points="290,248 285,305 250,305"/>
-          <polygon points="355,292 290,248 285,305"/>
-          <polygon points="410,270 377,345 355,292"/>
-          <polygon points="355,292 377,345 285,305"/>
-          <!-- Nose tip -->
-          <polygon points="215,305 285,305 250,330"/>
-          <!-- Lower face left -->
-          <polygon points="123,345 180,358 215,305"/>
-          <!-- Lower face right -->
-          <polygon points="377,345 285,305 320,358"/>
-          <!-- Philtrum and mouth left -->
-          <polygon points="215,305 250,330 250,348"/>
-          <polygon points="215,305 250,348 180,358"/>
-          <!-- Philtrum and mouth right -->
-          <polygon points="285,305 250,330 250,348"/>
-          <polygon points="285,305 250,348 320,358"/>
-          <!-- Beard left -->
-          <polygon points="123,345 180,358 190,395"/>
-          <polygon points="180,358 250,428 190,395"/>
-          <polygon points="180,358 250,348 250,428"/>
-          <!-- Beard right -->
-          <polygon points="377,345 320,358 310,395"/>
-          <polygon points="320,358 310,395 250,428"/>
-          <polygon points="320,358 250,348 250,428"/>
-          <!-- Left shoulder outer -->
-          <polygon points="123,345 55,460 145,460"/>
-          <!-- Left shoulder inner -->
-          <polygon points="123,345 145,460 190,395"/>
-          <polygon points="190,395 145,460 250,428"/>
-          <!-- Neck base -->
-          <polygon points="250,428 145,460 355,460"/>
-          <!-- Right shoulder inner -->
-          <polygon points="250,428 355,460 310,395"/>
-          <polygon points="310,395 355,460 377,345"/>
-          <!-- Right shoulder outer -->
-          <polygon points="377,345 355,460 445,460"/>
-        </svg>
-        <h1 class="welcome-title">Think before you build.</h1>
-        <p class="welcome-sub">Ask a question or use <span class="cmd">/help</span> to get started</p>
-        <div class="suggestion-cards">
-          <button class="suggestion-card" id="card-arch" type="button">
-            <span class="card-icon">&lt;/&gt;</span>
-            <span class="card-title">Analyze Architecture</span>
-            <span class="card-sub">Review current project structure</span>
-          </button>
-          <button class="suggestion-card" id="card-debug" type="button">
-            <span class="card-icon">&#9889;</span>
-            <span class="card-title">Debug Session</span>
-            <span class="card-sub">Find bottlenecks in your logic</span>
-          </button>
+        <div class="welcome-content">
+          <img class="robot-icon" src="https://lh3.googleusercontent.com/aida/ADBb0uicecM3T4yuJa-istWdl5qK5NXLjLTSD_Nn9mv8FsVANowLR3SUxRC0LG1u3AmbwURWz7aMASPp0V_8Bc35Cwd1UFOBfzPUqRshH8RuUae0eN3oCoxDQQqXBYAzwzM0PKcTM_LdFi2_LDAvsj2V5lhrGZGJ9B0DPuSxYfHRr3M0Q7RQLG-joku51_6BX8dSurO0hYDzSksoh40Eb612__zTJA0zYS4_HsgyDdReKjYiHl748wDaEufMGd-U6eMYvGvArNm3Yfc" alt="Struggle AI Logo" />
+          <h1 class="welcome-title">Think before you build.</h1>
+          <p class="welcome-sub">Ask a question or use <span class="cmd">/help</span> to get started</p>
+          <div class="suggestion-cards">
+            <button class="suggestion-card" id="card-arch" type="button">
+              <span class="card-icon">⌘</span>
+              <span class="card-title">Analyze Architecture</span>
+              <span class="card-sub">Review current project structure</span>
+            </button>
+            <button class="suggestion-card" id="card-debug" type="button">
+              <span class="card-icon">⚡</span>
+              <span class="card-title">Debug Session</span>
+              <span class="card-sub">Find bottlenecks in your logic</span>
+            </button>
+          </div>
         </div>
       </div>
-
-      <!-- Chat messages -->
       <div class="stream" id="stream" style="display:none;"></div>
-
-      <!-- Slash popup (anchored to bottom of stage) -->
       <div class="slash-popup" id="slash-popup">
         <div class="slash-popup-header">Available Commands</div>
       </div>
-
     </div>
-
-    <!-- INPUT BAR -->
-    <div class="input-bar">
-      <div class="input-row">
-        <button class="attach-btn" id="share-active-btn" aria-label="Attach file">
-          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M13.51 3.83a4.1 4.1 0 0 0-5.8 0L2.4 9.14a2.87 2.87 0 0 0 4.06 4.06l4.25-4.25a.5.5 0 0 0-.7-.71L5.76 12.5a1.87 1.87 0 1 1-2.64-2.65l5.3-5.3a3.1 3.1 0 1 1 4.38 4.38l-4.6 4.6a.5.5 0 0 0 .7.71l4.6-4.6a4.1 4.1 0 0 0 0-5.81z"/>
-          </svg>
-        </button>
-        <div class="composer-wrap">
-          <textarea
-            class="composer-input"
-            id="input"
-            placeholder="Ask about your code..."
-            rows="1"
-            aria-label="Message input"
-          ></textarea>
+    <div class="input-shell">
+      <div class="input-bar">
+        <div class="input-row">
+          <button class="attach-btn" id="share-active-btn" aria-label="Attach file">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M13.5 4.2a4 4 0 0 0-5.6 0L2.3 9.8a2.8 2.8 0 1 0 4 4l4.2-4.2a.5.5 0 1 0-.7-.7L5.6 13a1.8 1.8 0 1 1-2.6-2.5l5.5-5.5a3 3 0 1 1 4.2 4.2L8 13.9a.5.5 0 0 0 .7.7l4.8-4.8a4 4 0 0 0 0-5.6Z"/>
+            </svg>
+          </button>
+          <div class="composer-wrap">
+            <textarea class="composer-input" id="input" placeholder="Ask about your code..." rows="1" aria-label="Message input"></textarea>
+          </div>
+          <button class="send-button" id="send-btn" type="button">
+            Send
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+              <path d="M1 7h12M7.5 1.5l6 5.5-6 5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
         </div>
-        <button class="send-button" id="send-btn" type="button">
-          Send
-          <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
-            <path d="M1 7h12M7.5 1.5l6 5.5-6 5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
-      </div>
-      <div class="input-meta">
-        <button class="model-chip" id="model-btn" type="button" aria-label="Change model">
-          <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
-            <circle cx="5" cy="5" r="4" stroke="currentColor" stroke-width="1.2"/>
-            <circle cx="5" cy="5" r="1.5" fill="currentColor"/>
-          </svg>
-          <span id="model-label">Struggle-1.0</span>
-        </button>
-        <span class="context-badge" id="context-badge"></span>
+        <div class="input-meta">
+          <button class="model-chip" id="model-btn" type="button" aria-label="change model">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <circle cx="5" cy="5" r="4" stroke="currentColor" stroke-width="1.2"/>
+              <circle cx="5" cy="5" r="1.5" fill="currentColor"/>
+            </svg>
+            <span id="model-label">Struggle-1.0</span>
+          </button>
+          <span class="context-badge" id="context-badge"></span>
+          <span>Struggle AI can make mistakes. Verify important code.</span>
+        </div>
       </div>
     </div>
-
     <script nonce="${nonce}">
       const vscode = acquireVsCodeApi();
       const stageEl      = document.getElementById("stage");
@@ -692,6 +567,9 @@ export function getPanelHtml(): string {
       const inputEl      = document.getElementById("input");
       const sendBtnEl    = document.getElementById("send-btn");
       const modeSelectEl = document.getElementById("mode-select");
+      const modeButtonEl = document.getElementById("mode-button");
+      const modeButtonLabelEl = document.getElementById("mode-button-label");
+      const modeMenuEl = document.getElementById("mode-menu");
       const shareActEl   = document.getElementById("share-active-btn");
       const modelBtnEl   = document.getElementById("model-btn");
       const modelLabelEl = document.getElementById("model-label");
@@ -713,7 +591,6 @@ export function getPanelHtml(): string {
       function showStream() {
         welcomeEl.style.display = "none";
         streamEl.style.display  = "flex";
-        streamEl.style.flexDirection = "column";
       }
 
       function resetToWelcome() {
@@ -725,14 +602,32 @@ export function getPanelHtml(): string {
       function setBusy(busy) {
         sendBtnEl.disabled    = busy;
         modeSelectEl.disabled = busy;
+        modeButtonEl.disabled = busy;
         shareActEl.disabled   = busy;
         modelBtnEl.disabled   = busy;
       }
 
       function updateHeader(payload) {
-        modeSelectEl.value = payload.mode || "guided";
+        const nextMode = payload.mode || "guided";
+        modeSelectEl.value = nextMode;
+        updateModeUi(nextMode);
         if (payload.providerLabel) modelLabelEl.textContent = payload.providerLabel;
         setBusy(!!payload.busy);
+      }
+
+      function modeLabel(mode) {
+        return mode === "standard" ? "Standard Mode" : mode === "socratic" ? "Socratic Mode" : "Guided Mode";
+      }
+
+      function updateModeUi(mode) {
+        modeButtonLabelEl.textContent = modeLabel(mode);
+        modeMenuEl.querySelectorAll(".mode-option").forEach((btn) => {
+          btn.classList.toggle("active", btn.dataset.mode === mode);
+        });
+      }
+
+      function closeModeMenu() {
+        modeMenuEl.classList.remove("open");
       }
 
       // ── slash popup ──────────────────────────────────────────────────────────
@@ -832,6 +727,7 @@ export function getPanelHtml(): string {
         inputEl.value = "";
         inputEl.style.height = "auto";
         closeSlashPopup();
+        closeModeMenu();
       }
 
       // ── event listeners ───────────────────────────────────────────────────────
@@ -849,7 +745,7 @@ export function getPanelHtml(): string {
 
       inputEl.addEventListener("keydown", (e) => {
         if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendValue(inputEl.value); }
-        if (e.key === "Escape") closeSlashPopup();
+        if (e.key === "Escape") { closeSlashPopup(); closeModeMenu(); }
       });
 
       sendBtnEl.addEventListener("click", () => sendValue(inputEl.value));
@@ -861,6 +757,25 @@ export function getPanelHtml(): string {
 
       modeSelectEl.addEventListener("change",
         () => vscode.postMessage({ type: "setMode", mode: modeSelectEl.value }));
+      modeButtonEl.addEventListener("click", () => {
+        if (modeButtonEl.disabled) return;
+        modeMenuEl.classList.toggle("open");
+      });
+      modeMenuEl.querySelectorAll(".mode-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const nextMode = btn.dataset.mode;
+          if (!nextMode) return;
+          modeSelectEl.value = nextMode;
+          updateModeUi(nextMode);
+          closeModeMenu();
+          vscode.postMessage({ type: "setMode", mode: nextMode });
+        });
+      });
+      document.addEventListener("click", (e) => {
+        if (!e.target.closest(".mode-wrap")) {
+          closeModeMenu();
+        }
+      });
       shareActEl.addEventListener("click",
         () => vscode.postMessage({ type: "pickFileToShare" }));
       modelBtnEl.addEventListener("click",
