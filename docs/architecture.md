@@ -1,19 +1,17 @@
 # Struggle AI Architecture
 
-This document describes the current architecture of the Struggle AI monorepo and how the major parts interact.
+This document describes the current architecture of the Struggle AI monorepo and the boundaries between the major packages.
 
-For CLI usage details, see [packages/cli/README.md](/home/shafayetsadi/Projects/friction-hackathon/packages/cli/README.md).
+## Monorepo Overview
 
-## 1) Monorepo Structure
+The repo uses npm workspaces with TypeScript project references.
 
-The repo uses **npm workspaces** with TypeScript project references.
+- `packages/core` (`@struggle-ai/core`) is the shared product runtime
+- `packages/cli` (`@struggle-ai/cli`) is the terminal surface
+- `packages/vscode` (`struggle-ai-vscode`) is the VS Code surface
+- `apps/landing` (`landing`) is the marketing site
 
-- `packages/core` (`@struggle-ai/core`): shared domain + orchestration engine
-- `packages/cli` (`@struggle-ai/cli`): terminal interface + command handling
-- `packages/vscode` (`struggle-ai-vscode`): VS Code extension shell
-- `apps/landing` (`landing`): Next.js marketing site
-
-## 2) High-Level Architecture
+## High-Level Architecture
 
 ```mermaid
 flowchart LR
@@ -21,139 +19,150 @@ flowchart LR
   User --> VSCode[VS Code Extension]
   CLI --> Core[@struggle-ai/core]
   VSCode --> Core
-  Core --> Agent[pi-agent-core runtime]
-  Agent --> LLM[LLM Providers via pi-ai]
-  Core --> FS[IO abstraction read/write/exists]
+  Core --> Modes[Mode + session orchestration]
+  Modes --> LLM[LLM provider adapters]
+  Core --> IO[IO abstraction - files, streaming, notifications]
   Landing[Landing App] -. independent .- Core
 ```
 
-### Key boundary
+Key boundary:
 
-`packages/core` is the product brain and is designed to be reused by multiple surfaces.
-Runtime-specific concerns (terminal UI, VS Code APIs, local config file persistence) stay in caller packages.
+`packages/core` is the product brain. Runtime-specific concerns such as terminal rendering, VS Code APIs, and config persistence stay in the caller packages.
 
-## 3) Core Package (`packages/core`) Design
+## Core Package Design
 
-Core now centers on a `pi-agent-core` session wrapper plus a project-scoped tool set:
+Core is organized around a shared session engine plus supporting modules:
 
-- `coding-agent/session.ts`: session lifecycle + `pi-agent-core` wrapper
-- `coding-agent/tools.ts`: `read_file`, `write_file`, `list_files`, `search_files`, `run_command`
-- `coding-agent/prompt.ts`: system prompt generation based on project path, mode, and shared files
-- `artifacts/trail.ts`: Markdown trail rendering
-- `llm/adapter.ts`: direct provider adapter over `@mariozechner/pi-ai` for helper APIs
-- `gate/classifier.ts`: legacy intent helper still exported for compatibility
-- `prompts/*`: prompt assets still used by helper flows outside the coding-agent runtime
-- `config.ts`: provider resolution and config loading
+- `session/` — session engine and state handling
+- `coding-agent/` — mode-aware runtime, prompt generation, and tool integration
+- `guided/`, `standard/`, `socratic/` — mode-specific flow helpers
+- `validation/` — evaluation and scoring logic
+- `artifacts/` — trail export, notes, and ADR artifacts
+- `gate/` — intent classification
+- `llm/` — provider adapter layer
+- `prompts/` — versioned prompt markdown assets copied into `dist/prompts` on build
 
-### Core runtime model
+### Core contract
 
-- Entry point: `startSession(projectPath, io, config?)`
-- Returns `Session` with APIs:
-  - `sendMessage`
-  - `setMode`
-  - `shareFile`
-  - `invokeStuck`
-  - `invokeHint`
-  - `exportTrail`
-  - `getTrail`, `getADRs`
-- Output is streamed as typed `ResponseChunk` variants.
-- In the current coding-agent runtime, most output is emitted as `text` chunks summarizing tool activity and assistant responses.
+The stable public contract lives in:
 
-### State model
+- [packages/core/src/index.ts](/home/shafayetsadi/Projects/friction-hackathon/packages/core/src/index.ts)
+- [packages/core/src/types.ts](/home/shafayetsadi/Projects/friction-hackathon/packages/core/src/types.ts)
 
-Core maintains:
+The main entrypoint is `startSession(projectPath, io, config?)`, which returns a session object used by the CLI and the VS Code extension.
 
-- public `SessionState` (id, mode, active milestone/sub-problem, understanding score, shared files)
-- `pi-agent-core` message history and tool configuration
-- trail entries for audit/history
-- shared-file prompt context
+## Session Runtime Model
 
-## 4) IO and Environment Boundaries
+The runtime centers on:
 
-Core depends on an injected `IO` interface:
+- mode-aware session state
+- shared file context
+- streamed `ResponseChunk` output
+- project-scoped tools for file and command access
+- artifact generation for Learning Trail and ADR-related outputs
 
-- `readFile(path)`
-- `writeFile(path, content)`
-- `fileExists(path)`
-- `notify(level, message)`
-- `stream(chunk)`
+Important product/runtime boundary:
 
-This keeps core portable and allows each surface to control filesystem/UI behavior.
+- user-shared context is tracked through shared files
+- the model/runtime can use project-scoped tools during active session work
+- mode behavior changes how planning, validation, and execution are surfaced to the user
 
-- CLI implements IO with Node FS + terminal output
-- VS Code has an IO adapter using `vscode.workspace.fs` and webview messages
+## IO Boundary
 
-## 5) CLI Architecture (`packages/cli`)
+Core depends on an injected `IO` interface so it stays portable across surfaces.
 
-CLI has two layers:
+The interface includes:
 
-1. **Command layer** (`src/index.ts`)
-   - `commander` commands (`struggle`, `config set-provider`, `config show`, `repl`)
-   - reads/writes config at `~/.struggle-ai/config.json`
-2. **Interaction layer** (`src/repl.ts`)
-   - starts core session
-   - parses slash commands (`/mode`, `/share`, `/stuck`, `/hint`, `/trail export`)
-   - renders streamed response chunks in terminal
-   - supports richer TUI and readline fallback
+- file reads
+- file writes
+- existence checks
+- notifications
+- streamed response chunks
 
-## 6) VS Code Extension Architecture (`packages/vscode`)
+This lets each surface own its own environment behavior:
 
-Current extension structure:
+- CLI uses Node filesystem and terminal output
+- VS Code uses workspace/webview APIs
 
-- `src/extension.ts`: activation + command registration + placeholder panel
-- `src/panelHtml.ts`: webview markup
-- `src/ioImpl.ts`: VS Code-backed `IO` adapter
+## CLI Architecture
 
-Status: extension shell and Learning Trail view scaffold are present; full chat/session wiring to core is a next integration step.
+The CLI has two main layers:
 
-## 7) Landing App Architecture (`apps/landing`)
+1. `src/index.ts`
+   Handles command entry, config commands, provider/model operations, and auth-facing actions.
+2. `src/repl.ts` plus `src/repl/`
+   Handles the interactive session loop, slash commands, menus, and terminal UI behavior.
 
-- Next.js app-router based marketing site
-- Separate deployment/runtime concerns from core/CLI/extension
-- No runtime dependency on `@struggle-ai/core`
+Notable CLI-owned concerns:
 
-## 8) Primary Runtime Flow
+- config persistence in `~/.struggle-ai/config.json`
+- OAuth credential persistence in `~/.struggle-ai/auth.json`
+- REPL command discoverability and session ergonomics
+
+## VS Code Extension Architecture
+
+The extension is no longer just a placeholder shell. Its current structure includes:
+
+- `src/extension.ts` — activation, panel lifecycle, command wiring, trail view refresh
+- `src/panelHtml.ts` — webview markup and client-side UI shell
+- `src/cliProcess.ts` — CLI daemon bridge and IPC wrapper
+- `src/ioImpl.ts` — VS Code-backed IO adapter
+
+Current interaction model:
+
+- the extension starts a session through the CLI-backed daemon bridge
+- streamed responses are forwarded into the webview
+- the Learning Trail view is refreshed from session state/trail fetches
+
+## Landing App Architecture
+
+The landing app is independent from the core runtime.
+
+- It communicates the thesis and product story
+- It does not participate in CLI/extension session orchestration
+- It should stay separate from core runtime concerns
+
+## Runtime Message Flow
 
 ```mermaid
 sequenceDiagram
   participant U as User
-  participant S as Surface (CLI/VSCode)
-  participant C as Core Session Wrapper
-  participant A as pi-agent-core Agent
-  participant L as pi-ai Provider
-  participant T as Project Tools
+  participant S as Surface (CLI / VSCode)
+  participant C as Core Session
+  participant M as Mode Runtime
+  participant L as LLM Provider
+  participant T as Shared Files / Project Tools
 
   U->>S: Send message
   S->>C: session.sendMessage(message)
-  C->>A: agent.prompt(message)
-  A->>L: stream model turn
-  L-->>A: assistant text / tool calls
-  A->>T: execute project-scoped tools
-  T-->>A: tool results
+  C->>M: apply mode rules + session state
+  M->>L: stream model turn
+  L-->>M: assistant text / tool calls
+  M->>T: read shared context / run project tools when needed
+  T-->>M: tool results / file context
   C-->>S: ResponseChunk stream
   S-->>U: render output
 ```
 
-## 9) Architectural Decisions
+## Architectural Decisions
 
-1. **Shared core-first model**
-   - Behavior is implemented once in `packages/core` and consumed by multiple interfaces.
+1. Shared core-first model
+   Behavior is implemented once in `packages/core` and consumed by multiple surfaces.
 
-2. **Typed chunk protocol**
-   - Surfaces render structured chunks instead of parsing free-form text.
+2. Typed chunk protocol
+   Surfaces render typed response chunks instead of scraping unstructured output.
 
-3. **Project-scoped tool runtime**
-   - The model interacts with the codebase through explicit file and shell tools constrained to the session project root.
+3. Product-specific mode runtime
+   Guided, Standard, and Socratic are runtime behaviors, not just marketing labels.
 
-4. **Prompt assets versioned in core**
-   - Prompt templates are still part of source and copied during build for helper modules.
+4. Versioned prompt assets
+   Prompt markdown lives in source and is copied during build so runtime and docs stay aligned.
 
-5. **Provider abstraction through pi-ai**
-   - Provider selection is config-driven (`anthropic`, `google`, `openai`).
+5. Separate marketing surface
+   The landing page can evolve independently from the session runtime.
 
-## 10) Known Gaps / Next Steps
+## Known Active Gaps
 
-- Wire the coding-agent session and tool feedback into the VS Code extension
-- Optional true PDF export path (currently Markdown fallback)
-- Add persistence strategy beyond per-session memory structures
-- Expand testing around richer live tool-use scenarios and cross-surface behavior
+- deeper VS Code polish and richer UI iteration
+- broader automated verification around live tool activity
+- longer-term persistence beyond current session/trail artifacts

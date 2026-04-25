@@ -16,34 +16,24 @@ flowchart TD
 
   SessionStart --> ModeSelect{"Select mode"}
 
-  ModeSelect --> Guided["Guided Mode"]
-  ModeSelect --> Standard["Standard Mode"]
-  ModeSelect --> Socratic["Socratic Mode"]
+  ModeSelect --> Guided["Guided"]
+  ModeSelect --> Standard["Standard"]
+  ModeSelect --> Socratic["Full Socratic"]
 
-  Guided --> GuidedFlow["Inspect repo -> explain phases -> ask light question -> proceed"]
-  Standard --> StandardFlow["Clarify briefly -> inspect and edit code -> summarize"]
-  Socratic --> SocraticFlow["Inspect repo -> ask deep questions -> validate answer -> require approval"]
+  Guided --> GuidedFlow["Explain the plan -> ask a light question -> proceed"]
+  Standard --> StandardFlow["Clarify briefly -> generate fast -> keep understanding in the loop"]
+  Socratic --> SocraticFlow["Ask deep questions -> validate understanding -> unlock progress"]
 
   GuidedFlow --> Core["@struggle-ai/core"]
   StandardFlow --> Core
   SocraticFlow --> Core
 
-  Core --> Agent["pi-agent-core runtime"]
-  Agent --> Tools["Project-scoped tools"]
-  Tools --> Read["read_file"]
-  Tools --> Write["write_file"]
-  Tools --> Search["search_files"]
-  Tools --> ListFiles["list_files"]
-  Tools --> Run["run_command"]
+  Core --> Modes["Mode + session orchestration"]
+  Modes --> Tools["Shared files / project tools"]
+  Modes --> Provider["LLM provider adapters"]
 
-  Agent --> Provider["LLM provider via pi-ai"]
-  Provider --> Stream["Stream response chunks"]
-
-  Read --> Stream
-  Write --> Stream
-  Search --> Stream
-  ListFiles --> Stream
-  Run --> Stream
+  Tools --> Stream["Stream response chunks"]
+  Provider --> Stream
 
   Stream --> Render{"Render surface"}
 
