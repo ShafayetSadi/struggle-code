@@ -589,7 +589,7 @@ export class TUI {
       // Center horizontally and clamp vertically so overlays stay visible.
       const startCol = Math.max(0, Math.floor((width - overlayWidth) / 2));
       const offsetY = overlay.options.offsetY ?? 0;
-      const startRow = this.resolveOverlayStartRow(overlay.options, height, lines.length, sliced.length, offsetY);
+      const startRow = this.resolveOverlayStartRow(overlay.options, height, sliced.length, offsetY);
 
       for (let i = 0; i < sliced.length; i++) {
         const row = startRow + i;
@@ -663,7 +663,6 @@ export class TUI {
   private resolveOverlayStartRow(
     options: OverlayOptions,
     termHeight: number,
-    contentHeight: number,
     overlayHeight: number,
     offsetY: number
   ): number {
@@ -678,7 +677,7 @@ export class TUI {
       return Math.min(maxStart, Math.max(0, centered));
     }
 
-    const base = contentHeight - overlayHeight + offsetY;
+    const base = termHeight - overlayHeight + offsetY;
     return Math.min(maxStart, Math.max(0, base));
   }
 
