@@ -16,7 +16,7 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "Socrates AI",
+  title: "Struggle AI",
   description: "The Socratic dialogue for developers — understand what you build.",
   icons: {
     icon: [{ url: "/socrates-ai-logo.png", type: "image/png" }],

@@ -5,7 +5,6 @@ import {
   Code,
   Copy,
   Download,
-  FileText,
   GraduationCap,
   PlayCircle,
   Scale,
@@ -15,9 +14,10 @@ import {
 } from "lucide-react";
 
 import { InlineCopyRow } from "../components/inline-copy-row";
+import { LearningTrailWindow } from "../components/learning-trail-window";
 import { SocratesLogo } from "../components/socrates-logo";
 
-const CLI = "npm install -g @socrates-ai/cli";
+const CLI = "npm install -g @struggle-ai/cli";
 
 const rateLimiterSnippet = `const rateLimiter = (req, res, next) => {
   const { limit, current } = checkLimit(req.ip);
@@ -35,7 +35,7 @@ export default function Page() {
         <div className="mx-auto flex h-16 w-full max-w-[1440px] items-center justify-between px-8">
           <a href="/" className="flex items-center gap-3">
             <SocratesLogo variant="nav" />
-            <span className="font-mono text-xl font-bold tracking-tighter text-white">Socrates AI</span>
+            <span className="font-mono text-xl font-bold tracking-tighter text-white">Struggle AI</span>
           </a>
           <div className="hidden items-center gap-8 md:flex">
             <a
@@ -76,7 +76,7 @@ export default function Page() {
               Stop shipping code you <span className="text-[#22C55E]">can&apos;t explain.</span>
             </h1>
             <p className="max-w-lg text-xl leading-relaxed text-zinc-400">
-              Most AI tools remove friction. Socrates AI adds the right friction so you actually understand what you
+              Most AI tools remove friction. Struggle AI adds the right friction so you actually understand what you
               build.
             </p>
             <div className="flex flex-col gap-4 pt-4 sm:flex-row">
@@ -108,16 +108,16 @@ export default function Page() {
                   <div className="h-3 w-3 rounded-full bg-[#FFBD2E] shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]" />
                   <div className="h-3 w-3 rounded-full bg-[#27C93F] shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]" />
                 </div>
-                <div className="mx-auto font-mono text-xs uppercase tracking-widest text-zinc-500">zsh — socrates</div>
+                <div className="mx-auto font-mono text-xs uppercase tracking-widest text-zinc-500">zsh — struggle</div>
               </div>
               <div className="min-h-[400px] p-6 font-mono text-sm leading-relaxed">
                 <div className="flex gap-2">
                   <span className="text-[#22C55E]">➜</span>
-                  <span className="text-white">socrates init project-alpha</span>
+                  <span className="text-white">struggle init project-alpha</span>
                 </div>
                 <div className="mt-2 italic text-zinc-500">Analyzing architecture...</div>
                 <div className="mt-4 text-[#22C55E]">
-                  ? Socrates: Before we generate the API, how do you plan to handle state persistence?
+                  ? Struggle: Before we generate the API, how do you plan to handle state persistence?
                 </div>
                 <div className="mt-2 border-l-2 border-[#27272A] pl-4 text-zinc-400">
                   1) Redis (In-memory cache)
@@ -131,7 +131,7 @@ export default function Page() {
                   <span className="text-white">1</span>
                 </div>
                 <div className="mt-4 text-[#22C55E]">
-                  ? Socrates: Excellent. Why Redis over a traditional SQL database for this specific microservice?
+                  ? Struggle: Excellent. Why Redis over a traditional SQL database for this specific microservice?
                 </div>
                 <div className="mt-2 flex items-center gap-2">
                   <span className="inline-block h-4 w-2 animate-pulse bg-[#22C55E]" />
@@ -174,11 +174,12 @@ export default function Page() {
 
         <section className="mx-auto max-w-[1440px] px-8 py-32">
           <div className="mb-16 space-y-4 text-center">
-            <h2 className="text-4xl font-bold text-white">
-              The Socratic Dialogue for <span className="text-[#22C55E]">Devs</span>
+            <h2 className="text-4xl font-bold text-white md:text-5xl">
+              Think Before You <span className="text-[#22C55E]">Build</span>
             </h2>
-            <p className="mx-auto max-w-xl text-zinc-400">
-              Socrates AI interrogates your intent before generating a single line of code.
+            <p className="mx-auto max-w-2xl text-lg text-zinc-400">
+              Struggle AI asks the right questions before writing any code — so you understand what you&apos;re
+              building, not just copy it.
             </p>
           </div>
           <div className="mx-auto max-w-4xl overflow-hidden rounded-xl border border-[#27272A] bg-[#121214]">
@@ -262,7 +263,7 @@ export default function Page() {
                 </div>
                 <h3 className="mb-4 text-2xl font-bold text-white">Full Socratic</h3>
                 <p className="mb-8 text-sm leading-relaxed text-zinc-400">
-                  High friction, deep thinking. Socrates will refuse to generate code until you successfully explain the
+                  High friction, deep thinking. Struggle will refuse to generate code until you successfully explain the
                   architectural trade-offs of your request.
                 </p>
                 <div className="inline-flex items-center gap-2 rounded border border-[#27272A] bg-[#121214] px-3 py-1">
@@ -326,65 +327,7 @@ export default function Page() {
               </div>
             </div>
             <div className="lg:col-span-8">
-              <div className="overflow-hidden rounded-xl border border-[#27272A] bg-[#121214]">
-                <div className="flex items-center justify-between border-b border-[#27272A] bg-[#18181B] px-6 py-3">
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-zinc-500" aria-hidden />
-                    <span className="font-mono text-xs uppercase tracking-widest text-white">
-                      Socrates_Learning_Trail.md
-                    </span>
-                  </div>
-                  <div className="flex gap-1">
-                    <div className="h-2 w-2 rounded-full bg-[#22C55E]" />
-                    <div className="h-2 w-2 rounded-full bg-[#22C55E]/30" />
-                    <div className="h-2 w-2 rounded-full bg-[#22C55E]/30" />
-                  </div>
-                </div>
-                <div className="max-h-[500px] space-y-6 overflow-y-auto p-8 font-sans text-zinc-400">
-                  <h1 className="border-b border-[#27272A] pb-4 text-2xl font-bold text-white">Project: Auth-Bridge</h1>
-                  <p>
-                    This document tracks the technical evolution of{" "}
-                    <code className="rounded bg-[#18181B] px-1 text-[#22C55E]">Auth-Bridge</code>. Decisions made
-                    through Socratic dialogue.
-                  </p>
-                  <h2 className="mt-8 text-xl font-bold text-white">Decisions &amp; Trade-offs</h2>
-                  <div className="rounded border-l-4 border-[#22C55E] bg-[#18181B] p-4">
-                    <p className="mb-2 text-sm font-bold text-white">JWT vs Session Cookies</p>
-                    <p className="text-sm">
-                      Chose JWT because the system needs to be stateless for horizontal scaling. Acknowledged security
-                      risk: No easy way to revoke tokens without a blacklist.
-                    </p>
-                  </div>
-                  <h2 className="mt-8 text-xl font-bold text-white">Knowledge Checkpoints</h2>
-                  <ul className="list-disc space-y-2 pl-6 text-sm">
-                    <li>
-                      Explained the difference between <code className="text-zinc-200">symmetric</code> and{" "}
-                      <code className="text-zinc-200">asymmetric</code> encryption.
-                    </li>
-                    <li>
-                      Mapped the <code className="text-zinc-200">OIDC</code> handshake flow from scratch.
-                    </li>
-                    <li>
-                      Identified why <code className="text-zinc-200">bcrypt</code> is preferred over{" "}
-                      <code className="text-zinc-200">SHA-256</code> for password hashing.
-                    </li>
-                  </ul>
-                  <h2 className="mt-8 text-xl font-bold text-white">Code Reference</h2>
-                  <div className="rounded-lg bg-[#050505] p-4 font-mono text-xs">
-                    <span className="text-zinc-600">{"// Derived from Dialogue #42"}</span>
-                    <br />
-                    <span className="text-[#22C55E]">export</span> <span className="text-white">const</span>{" "}
-                    <span className="text-[#96d59d]">verifyScope</span> <span className="text-white">=</span>{" "}
-                    <span className="text-white">(token) =&gt; {"{"}</span>
-                    <br />
-                    <span className="text-zinc-500">
-                      {"  // Logic for scope verification explained by user in PoU check."}
-                    </span>
-                    <br />
-                    <span className="text-white">{"};"}</span>
-                  </div>
-                </div>
-              </div>
+              <LearningTrailWindow />
             </div>
           </div>
         </section>
@@ -392,12 +335,14 @@ export default function Page() {
         <section className="bg-[#050505] py-32">
           <div className="mx-auto max-w-[1440px] px-8">
             <div className="mb-20 text-center">
-              <h2 className="text-4xl font-bold text-white">The Socratic Workflow</h2>
+              <h2 className="text-4xl font-bold text-white">
+                The <span className="text-[#22C55E]">Struggle</span> Workflow
+              </h2>
             </div>
             <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
               {[
                 { n: "1", t: "Ask", d: "Input your project requirements through the CLI or Web UI." },
-                { n: "2", t: "Think", d: "Socrates challenges your assumptions with clarifying questions." },
+                { n: "2", t: "Think", d: "Struggle challenges your assumptions with clarifying questions." },
                 { n: "3", t: "Build", d: "Code is generated once you demonstrate architectural clarity." },
                 { n: "4", t: "Export", d: "Receive your source code and the Learning Trail documentation." },
               ].map((step) => (
@@ -456,7 +401,7 @@ export default function Page() {
           <div className="flex flex-col items-center gap-2 md:items-start">
             <div className="flex items-center gap-3">
               <SocratesLogo variant="footer" />
-              <div className="font-bold text-white">Socrates AI</div>
+              <div className="font-bold text-white">Struggle AI</div>
             </div>
             <div className="font-mono text-xs uppercase tracking-widest text-[#22C55E]">Built for the terminal.</div>
           </div>
@@ -475,7 +420,7 @@ export default function Page() {
             </a>
           </div>
           <div className="text-center font-mono text-xs text-zinc-500 md:text-right">
-            © 2026 Socrates AI. Built with ❤️ during the FRICTION Hackathon.
+            © 2026 Struggle AI. Built with ❤️ during the FRICTION Hackathon.
           </div>
         </div>
       </footer>
