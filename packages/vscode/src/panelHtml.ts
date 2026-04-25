@@ -280,6 +280,49 @@ export function getPanelHtml(): string {
         padding: 16px 20px;
         width: min(100%, 760px);
       }
+      .message.assistant .body h1,
+      .message.assistant .body h2,
+      .message.assistant .body h3 {
+        margin: 0 0 10px;
+        line-height: 1.3;
+        color: var(--text);
+      }
+      .message.assistant .body h1 { font-size: 20px; }
+      .message.assistant .body h2 { font-size: 18px; }
+      .message.assistant .body h3 { font-size: 16px; }
+      .message.assistant .body p { margin: 0 0 10px; white-space: pre-wrap; }
+      .message.assistant .body ul,
+      .message.assistant .body ol { margin: 0 0 12px 20px; }
+      .message.assistant .body li { margin: 4px 0; }
+      .message.assistant .body code {
+        font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+        background: rgba(15, 23, 42, 0.38);
+        border: 1px solid rgba(134,149,133,.35);
+        border-radius: 6px;
+        padding: 1px 5px;
+        font-size: 12px;
+      }
+      .message.assistant .body pre {
+        margin: 10px 0 14px;
+        background: #09090b;
+        border: 1px solid #27272a;
+        border-radius: 10px;
+        padding: 12px;
+        overflow-x: auto;
+      }
+      .message.assistant .body pre code {
+        background: transparent;
+        border: 0;
+        padding: 0;
+        font-size: 12px;
+        line-height: 1.5;
+        white-space: pre;
+      }
+      .message.assistant .body hr {
+        border: 0;
+        border-top: 1px solid rgba(134,149,133,.35);
+        margin: 12px 0;
+      }
       .assistant-actions {
         margin-top: 16px;
         padding-top: 14px;
@@ -612,6 +655,10 @@ export function getPanelHtml(): string {
         modeSelectEl.value = nextMode;
         updateModeUi(nextMode);
         if (payload.providerLabel) modelLabelEl.textContent = payload.providerLabel;
+        if (!payload.contextLabel) {
+          contextBadge.classList.remove("visible");
+          contextBadge.textContent = "";
+        }
         setBusy(!!payload.busy);
       }
 
@@ -661,6 +708,101 @@ export function getPanelHtml(): string {
 
       // ── message rendering ────────────────────────────────────────────────────
 
+      function escapeHtml(value) {
+        return value
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;");
+      }
+
+      function renderInlineMarkdown(line) {
+        let html = escapeHtml(line);
+        html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+        html = html.replace(/\\*\\*([^*]+)\\*\\*/g, "<strong>$1</strong>");
+        html = html.replace(/\\*([^*]+)\\*/g, "<em>$1</em>");
+        return html;
+      }
+
+      function renderMarkdown(raw) {
+        const text = raw.replace(/\\r/g, "");
+        const lines = text.split("\\n");
+        const out = [];
+        let inCode = false;
+        let codeLang = "";
+        let inUl = false;
+        let inOl = false;
+
+        function closeLists() {
+          if (inUl) { out.push("</ul>"); inUl = false; }
+          if (inOl) { out.push("</ol>"); inOl = false; }
+        }
+
+        for (const line of lines) {
+          const fence = line.match(/^```(.*)$/);
+          if (fence) {
+            if (inCode) {
+              out.push("</code></pre>");
+              inCode = false;
+              codeLang = "";
+            } else {
+              closeLists();
+              codeLang = (fence[1] || "").trim();
+              out.push("<pre><code" + (codeLang ? ' data-lang="' + escapeHtml(codeLang) + '"' : "") + ">");
+              inCode = true;
+            }
+            continue;
+          }
+
+          if (inCode) {
+            out.push(escapeHtml(line) + "\\n");
+            continue;
+          }
+
+          const trimmed = line.trim();
+          if (!trimmed) {
+            closeLists();
+            continue;
+          }
+
+          if (trimmed === "---") {
+            closeLists();
+            out.push("<hr />");
+            continue;
+          }
+
+          const h = trimmed.match(/^(#{1,3})\\s+(.*)$/);
+          if (h) {
+            closeLists();
+            const level = h[1].length;
+            out.push("<h" + level + ">" + renderInlineMarkdown(h[2]) + "</h" + level + ">");
+            continue;
+          }
+
+          const ul = line.match(/^\\s*[-*]\\s+(.*)$/);
+          if (ul) {
+            if (inOl) { out.push("</ol>"); inOl = false; }
+            if (!inUl) { out.push("<ul>"); inUl = true; }
+            out.push("<li>" + renderInlineMarkdown(ul[1]) + "</li>");
+            continue;
+          }
+
+          const ol = line.match(/^\\s*\\d+\\.\\s+(.*)$/);
+          if (ol) {
+            if (inUl) { out.push("</ul>"); inUl = false; }
+            if (!inOl) { out.push("<ol>"); inOl = true; }
+            out.push("<li>" + renderInlineMarkdown(ol[1]) + "</li>");
+            continue;
+          }
+
+          closeLists();
+          out.push("<p>" + renderInlineMarkdown(trimmed) + "</p>");
+        }
+
+        if (inCode) out.push("</code></pre>");
+        closeLists();
+        return out.join("");
+      }
+
       function renderEntry(entry) {
         const node = document.createElement("div");
         node.className = "message " + entry.role;
@@ -679,7 +821,8 @@ export function getPanelHtml(): string {
 
           const body = document.createElement("div");
           body.className = "body";
-          body.textContent = entry.text;
+          body.dataset.raw = entry.text || "";
+          body.innerHTML = renderMarkdown(body.dataset.raw);
           node.appendChild(body);
 
           const actions = document.createElement("div");
@@ -714,7 +857,9 @@ export function getPanelHtml(): string {
       function patchLastAssistant(text) {
         const last = streamEl.querySelector(".message.assistant:last-of-type .body");
         if (!last) { renderEntry({ role: "assistant", text }); return; }
-        last.textContent += text;
+        const currentRaw = last.dataset.raw || "";
+        last.dataset.raw = currentRaw + text;
+        last.innerHTML = renderMarkdown(last.dataset.raw);
         scrollToBottom();
       }
 
@@ -772,12 +917,18 @@ export function getPanelHtml(): string {
         });
       });
       document.addEventListener("click", (e) => {
-        if (!e.target.closest(".mode-wrap")) {
+        if (!(e.target instanceof Element) || !e.target.closest(".mode-wrap")) {
           closeModeMenu();
         }
       });
-      shareActEl.addEventListener("click",
-        () => vscode.postMessage({ type: "pickFileToShare" }));
+      shareActEl.addEventListener("click", (e) => {
+        // Keep previous behavior available with Shift+Click.
+        if (e.shiftKey) {
+          vscode.postMessage({ type: "pickFileToShare" });
+          return;
+        }
+        vscode.postMessage({ type: "shareActiveFile" });
+      });
       modelBtnEl.addEventListener("click",
         () => vscode.postMessage({ type: "pickModel" }));
       document.getElementById("settings-btn").addEventListener("click",
