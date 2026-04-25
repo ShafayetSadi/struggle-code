@@ -1,0 +1,13 @@
+.vscode/**
+.gitignore
+src/**
+node_modules/**
+scripts/**
+test/**
+tsconfig.json
+**/*.tsbuildinfo
+**/*.map
+*.config.*
+biome.json
+.eslintrc*
+# Included in .vsix: dist/extension.js, dist/*.md, media/, package.json, LICENSE, README.md

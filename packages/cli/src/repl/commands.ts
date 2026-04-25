@@ -1,0 +1,232 @@
+import { join, resolve } from "node:path";
+
+import type { Mode, Session } from "@struggle-ai/core";
+
+import { formatChunk } from "./formatting.js";
+import { chalk, P } from "./palette.js";
+import type { ReplState, SlashCommand } from "./types.js";
+
+export const ROOT_MENU_TEXT = `
+Commands:
+  /help                     Show all available commands
+  /login                    Open provider login selector
+  /providers [provider]     Show providers or switch the active provider
+  /logout                   Clear saved credentials for the active provider
+  /mode                     Show available learning modes
+  /model [model-id]         Show active model or switch models
+  /copy                     Copy the latest generated output
+  /clear                    Clear the transcript
+  /new                      Start a fresh session
+  /resume [session-id]      List saved sessions or resume one by id
+  /stuck                    Trigger a stuck-session intervention
+  /trail                    Show trail artifact commands
+  /trail export [path] [--format md|pdf]
+                            Export the raw learning trail
+  /trail notes [path]       Generate AI notes from the current trail
+  /trail adr [path]         Generate an ADR draft for the current project
+  /exit, /quit              Close the session
+`.trim();
+
+export const TRAIL_MENU_TEXT = `
+Trail commands:
+  /trail export [path] [--format md|pdf]
+                            Export the raw learning trail
+  /trail notes [path]       Generate AI notes from the current trail
+  /trail adr [path]         Generate an ADR draft for the current project
+`.trim();
+
+export const LOGIN_MENU_TEXT = `
+Available login providers:
+  /login anthropic          Save an Anthropic API key
+  /login google             Save a Google Gemini API key
+  /login openai             Save an OpenAI API key
+  /login openrouter         Save an OpenRouter API key
+  /login google-antigravity Authenticate with Google Antigravity
+  /login openai-codex       Authenticate with OpenAI Codex
+`.trim();
+
+export const PROVIDERS_MENU_TEXT = `
+Available providers:
+  /providers anthropic          Switch to Anthropic
+  /providers google             Switch to Google Gemini
+  /providers openai             Switch to OpenAI
+  /providers openrouter         Switch to OpenRouter
+  /providers google-antigravity Switch to Google Antigravity
+  /providers openai-codex       Switch to OpenAI Codex
+`.trim();
+
+export function formatProvidersMenu(providers: string[]): string[] {
+  if (providers.length === 0) {
+    return ["No logged-in providers yet.", "Run /login to authenticate a provider first."];
+  }
+
+  return ["Available providers:", ...providers.map((provider) => `  /providers ${provider}`)];
+}
+
+export const HELP_TEXT = ROOT_MENU_TEXT;
+
+export const MODE_MENU_TEXT = `
+Available modes:
+  /mode guided              Guided learning with active nudges
+  /mode standard            Balanced mode (default)
+  /mode socratic            Questions only, no direct answers
+`.trim();
+
+export function parseSlashCommand(input: string): SlashCommand | undefined {
+  const trimmed = input.trim();
+  if (!trimmed.startsWith("/")) return undefined;
+  if (trimmed === "/") return { kind: "root-menu" };
+
+  const tokens = trimmed.slice(1).split(/\s+/).filter(Boolean);
+  const [command, ...args] = tokens;
+
+  switch (command) {
+    case "help":
+      return { kind: "help" };
+    case "clear":
+      return { kind: "clear" };
+    case "copy":
+      return { kind: "copy" };
+    case "new":
+      return { kind: "new" };
+    case "resume":
+      return args[0] ? { kind: "resume", historyId: args[0] } : { kind: "resume" };
+    case "exit":
+    case "quit":
+      return { kind: "exit" };
+    case "login":
+      return args.length > 0 ? { kind: "login", provider: args.join(" ") } : { kind: "login" };
+    case "providers":
+    case "provider":
+      return args.length > 0 ? { kind: "providers", provider: args.join(" ") } : { kind: "providers-menu" };
+    case "logout":
+      return { kind: "logout" };
+    case "model":
+      return args.length > 0 ? { kind: "model", model: args.join(" ") } : { kind: "model" };
+    case "mode":
+      if (args.length === 0) return { kind: "mode-menu" };
+      if (args[0] === "guided" || args[0] === "standard" || args[0] === "socratic") {
+        return { kind: "mode", mode: args[0] as Mode };
+      }
+      return { kind: "mode-menu" };
+    case "stuck":
+      return { kind: "stuck" };
+    case "trail": {
+      if (args.length === 0) return { kind: "trail-menu" };
+      const subcommand = args[0];
+      const path = args.find((v) => !v.startsWith("--") && v !== subcommand);
+      if (subcommand === "export") {
+        const format = args.includes("--format") && args[args.indexOf("--format") + 1] === "pdf" ? "pdf" : "md";
+        return path ? { kind: "trail-export", path, format } : { kind: "trail-export", format };
+      }
+      if (subcommand === "notes") {
+        return path ? { kind: "trail-notes", path } : { kind: "trail-notes" };
+      }
+      if (subcommand === "adr") {
+        return path ? { kind: "trail-adr", path } : { kind: "trail-adr" };
+      }
+      return { kind: "trail-menu" };
+    }
+    default:
+      return { kind: "root-menu" };
+  }
+}
+
+export function syncHintState(session: Session, state: ReplState): void {
+  if (session.state.activeMilestone !== state.lastMilestone) {
+    state.lastMilestone = session.state.activeMilestone;
+  }
+}
+
+function defaultTrailPath(projectPath: string, session: Session, stem: "trail" | "trail-notes" | "trail-adr", format = "md"): string {
+  return join(projectPath, ".struggle-ai", `${stem}-${session.state.id}.${format}`);
+}
+
+export async function streamChunks<T>(iterable: AsyncIterable<T>, onChunk: (chunk: T) => void): Promise<void> {
+  for await (const chunk of iterable) {
+    onChunk(chunk);
+  }
+}
+
+export async function handleSlashCommand(
+  command: SlashCommand,
+  session: Session,
+  projectPath: string,
+  replState: ReplState,
+  handleModelCommand: (model?: string) => Promise<string[]>,
+  handleLoginCommand: (provider?: string) => Promise<string[]>,
+  handleProviderCommand: (provider?: string) => Promise<string[]>,
+  handleLogoutCommand: () => Promise<string[]>,
+  writeLine: (value: string) => void,
+  writeLines: (values: string[]) => void
+): Promise<"continue" | "exit"> {
+  switch (command.kind) {
+    case "root-menu":
+      writeLines(ROOT_MENU_TEXT.split("\n"));
+      return "continue";
+    case "help":
+      writeLines(HELP_TEXT.split("\n"));
+      return "continue";
+    case "mode-menu":
+      writeLines(MODE_MENU_TEXT.split("\n"));
+      return "continue";
+    case "trail-menu":
+      writeLines(TRAIL_MENU_TEXT.split("\n"));
+      return "continue";
+    case "providers-menu":
+      writeLines(await handleProviderCommand());
+      return "continue";
+    case "model": {
+      const modelCmd = command as { kind: "model"; model?: string };
+      writeLines(await handleModelCommand(modelCmd.model));
+      return "continue";
+    }
+    case "copy":
+    case "clear":
+    case "new":
+    case "resume":
+      return "continue";
+    case "exit":
+      return "exit";
+    case "login":
+      writeLines(command.provider ? await handleLoginCommand(command.provider) : LOGIN_MENU_TEXT.split("\n"));
+      return "continue";
+    case "providers":
+      writeLines(await handleProviderCommand(command.provider));
+      return "continue";
+    case "logout":
+      writeLines(await handleLogoutCommand());
+      return "continue";
+    case "mode":
+      session.setMode(command.mode);
+      syncHintState(session, replState);
+      writeLine(chalk.hex(P.blue)(`mode set to ${command.mode}`));
+      return "continue";
+    case "stuck":
+      await streamChunks(session.invokeStuck(), (chunk) => writeLines(formatChunk(chunk)));
+      syncHintState(session, replState);
+      return "continue";
+    case "trail-export": {
+      const outputPath = command.path
+        ? resolve(projectPath, command.path)
+        : defaultTrailPath(projectPath, session, "trail", command.format);
+      await session.exportTrail(outputPath, command.format);
+      writeLine(chalk.hex(P.green)(`trail exported  ${outputPath}`));
+      return "continue";
+    }
+    case "trail-notes": {
+      const outputPath = command.path ? resolve(projectPath, command.path) : defaultTrailPath(projectPath, session, "trail-notes");
+      await session.exportTrailNotes(outputPath);
+      writeLine(chalk.hex(P.green)(`trail notes exported  ${outputPath}`));
+      return "continue";
+    }
+    case "trail-adr": {
+      const outputPath = command.path ? resolve(projectPath, command.path) : defaultTrailPath(projectPath, session, "trail-adr");
+      await session.exportTrailADR(outputPath);
+      writeLine(chalk.hex(P.green)(`trail adr exported  ${outputPath}`));
+      return "continue";
+    }
+  }
+}
+
+export type { Mode, ReplState, SlashCommand };

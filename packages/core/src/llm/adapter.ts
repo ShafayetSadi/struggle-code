@@ -1,13 +1,14 @@
 import {
   type AssistantMessage,
   type Context,
-  type KnownProvider,
   completeSimple,
   getModel,
+  type KnownProvider,
   streamSimple,
 } from "@mariozechner/pi-ai";
 
 import type { ProviderConfig } from "../types.js";
+import { resolveProviderApiKey } from "./auth.js";
 
 export interface LLMMessage {
   role: "system" | "user" | "assistant";
@@ -23,14 +24,17 @@ export interface LLMAdapter {
   stream(messages: LLMMessage[], options?: CompletionOptions): AsyncIterable<string>;
 }
 
-function withProviderApiKey<T>(config: ProviderConfig, run: () => Promise<T>): Promise<T> {
-  if (!process.env[config.apiKeyEnv]) {
-    throw new Error(`Missing API key: set ${config.apiKeyEnv} in your environment`);
-  }
-  return run();
+function normalizePlainTextOutput(text: string): string {
+  return text
+    .replace(/\r/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .trim();
 }
 
-function getTextFromCompletionContent(content: unknown): string {
+function extractPlainText(content: unknown): string {
+  if (typeof content === "string") {
+    return content;
+  }
   if (!Array.isArray(content)) {
     return "";
   }
@@ -95,27 +99,24 @@ export function createLLMAdapter(config: ProviderConfig): LLMAdapter {
 
   return {
     async complete(messages, options) {
-      const apiKey = process.env[config.apiKeyEnv];
-      return withProviderApiKey(config, async () => {
+      return resolveProviderApiKey(config).then(async (apiKey) => {
         const response = await completeSimple(model, toContext(messages), {
-          ...(apiKey ? { apiKey } : {}),
+          apiKey,
           ...(options?.reasoning ? { reasoning: options.reasoning } : {}),
         });
-        return getTextFromCompletionContent(response.content);
+        return normalizePlainTextOutput(extractPlainText(response.content));
       });
     },
     async *stream(messages, options) {
-      const apiKey = process.env[config.apiKeyEnv];
-      const events = await withProviderApiKey(config, async () =>
-        streamSimple(model, toContext(messages), {
-          ...(apiKey ? { apiKey } : {}),
-          ...(options?.reasoning ? { reasoning: options.reasoning } : {}),
-        })
-      );
+      const apiKey = await resolveProviderApiKey(config);
+      const events = await streamSimple(model, toContext(messages), {
+        apiKey,
+        ...(options?.reasoning ? { reasoning: options.reasoning } : {}),
+      });
 
       for await (const event of events) {
         if (event.type === "text_delta") {
-          yield event.delta;
+          yield event.delta.replace(/\r/g, "");
         }
       }
     },

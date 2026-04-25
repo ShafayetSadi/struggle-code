@@ -2,7 +2,10 @@
   "name": "struggle-ai",
   "private": true,
   "version": "0.1.0",
-  "workspaces": ["packages/*", "apps/*"],
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "engines": {
     "node": ">=20"
   },
@@ -13,13 +16,19 @@
     "lint": "biome lint .",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "tsc --build",
+    "dev:core": "npm run dev --workspace @struggle-ai/core",
     "dev:cli": "npm run dev --workspace @struggle-ai/cli",
     "dev:landing": "npm run dev --workspace landing",
-    "dev:vscode": "npm run dev --workspace struggle-ai-vscode"
+    "dev:vscode": "npm run dev --workspace struggle-ai-vscode",
+    "publish:cli": "npm run build --workspace @struggle-ai/core && npm run build --workspace @struggle-ai/cli && npm publish --workspace @struggle-ai/cli --access public",
+    "publish:vscode": "npm run build --workspace struggle-ai-vscode && cd packages/vscode && npx @vscode/vsce publish --no-dependencies"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.9.0",
-    "typescript": "^5.6.0",
+    "@biomejs/biome": "^2.4.13",
+    "typescript": "^6.0.3",
     "vitest": "^4.1.5"
+  },
+  "dependencies": {
+    "lucide-react": "^0.515.0"
   }
 }

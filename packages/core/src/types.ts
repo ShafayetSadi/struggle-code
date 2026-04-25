@@ -1,17 +1,42 @@
-export type Mode = "full-socratic" | "guided" | "standard";
+export type Mode = "socratic" | "guided" | "standard";
 export type Intent = "quick_help" | "debug" | "project";
-export type Provider = "anthropic" | "google" | "openai";
+export type Provider = "anthropic" | "google" | "openai" | "openrouter" | "openai-codex" | "google-antigravity";
+
+export interface OAuthCredentials {
+  refresh: string;
+  access: string;
+  expires: number;
+  enterpriseUrl?: string;
+  projectId?: string;
+  email?: string;
+  accountId?: string;
+}
+
+export interface OAuthProviderAuth {
+  type: "oauth";
+  credentials: OAuthCredentials;
+}
+
+export interface ApiKeyProviderAuth {
+  type: "api-key";
+  apiKey: string;
+}
+
+export type ProviderAuth = OAuthProviderAuth | ApiKeyProviderAuth;
 
 export interface ProviderConfig {
   provider: Provider;
   model: string; // e.g., "claude-sonnet-4-5", "gemini-2.5-flash", "gpt-4o"
-  apiKeyEnv: string; // name of env var, not the key itself
+  apiKeyEnv: string; // env var for API-key providers, identifier label for auth-backed providers
+  auth?: ProviderAuth;
+  onAuthRefresh?: (auth: ProviderAuth) => Promise<void> | void;
 }
 
 export interface SessionState {
   id: string;
   projectPath: string;
   mode: Mode;
+  modePhase?: "idle" | "planning" | "awaiting-approval" | "awaiting-validation" | "executing" | "verifying";
   understandingScore: number; // 0-100
   activeMilestone?: string;
   activeSubProblem?: string;
@@ -36,6 +61,7 @@ export type TrailEntryType =
   | "stuck_session"
   | "hint"
   | "bypass"
+  | "artifact_export"
   | "session_end";
 
 export interface TrailEntry {
@@ -59,12 +85,39 @@ export interface ADR {
   createdAt: string;
 }
 
+export interface ImplementationPlanFile {
+  path: string;
+  action: "create" | "update";
+  why: string;
+}
+
+export interface ImplementationPhase {
+  id: string;
+  title: string;
+  summary: string;
+  files: ImplementationPlanFile[];
+  verification: string[];
+}
+
+export interface ImplementationPlan {
+  goal: string;
+  summary: string;
+  architecture: string[];
+  phases: ImplementationPhase[];
+}
+
 export interface SubProblem {
   id: string;
   description: string;
   questions: string[];
   resolved: boolean;
   order: number;
+}
+
+export interface ValidationQuestion {
+  id: string;
+  prompt: string;
+  expectedKeywords: string[];
 }
 
 export type ResponseChunk =

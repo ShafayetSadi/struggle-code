@@ -76,9 +76,12 @@ npm run test
 
 ```bash
 npm run dev:cli
-npx @struggle-ai/cli --help
-npx @struggle-ai/cli
+npm exec --workspace @struggle-ai/cli struggle -- --help
+npm exec --workspace @struggle-ai/cli struggle -- --project /tmp/struggle-fastapi-demo
+npm exec --workspace @struggle-ai/cli struggle -- --project /path/to/another/project
 ```
+
+Use the workspace CLI for local verification so you run the code from this repo, not the published package. The `-- --project <path>` form is the preferred way to test the CLI against different folders.
 
 ### VS Code extension
 

@@ -1,0 +1,810 @@
+import type { AgentEvent } from "@mariozechner/pi-agent-core";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { completeSimple, streamSimple } = vi.hoisted(() => ({
+  completeSimple: vi.fn(),
+  streamSimple: vi.fn(),
+}));
+
+vi.mock("@mariozechner/pi-ai", () => ({
+  completeSimple,
+  streamSimple,
+  getModel: vi.fn(() => ({
+    api: "anthropic-messages",
+    provider: "anthropic",
+    id: "fake-model",
+    name: "fake-model",
+    baseUrl: "https://example.com",
+    reasoning: true,
+    input: ["text"],
+    cost: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+    },
+    contextWindow: 200_000,
+    maxTokens: 8_000,
+  })),
+}));
+
+vi.mock("@mariozechner/pi-ai/oauth", () => ({
+  getOAuthApiKey: vi.fn(),
+}));
+
+vi.mock("@mariozechner/pi-agent-core", () => {
+  class MockAgent {
+    static events: AgentEvent[] = [];
+    static instances: MockAgent[] = [];
+
+    listeners = new Set<(event: AgentEvent) => void>();
+    state: {
+      systemPrompt: string;
+      thinkingLevel: string;
+      tools: unknown[];
+      messages: string[];
+      model?: unknown;
+    };
+
+    constructor(options?: {
+      initialState?: {
+        systemPrompt?: string;
+        thinkingLevel?: string;
+        tools?: unknown[];
+        model?: unknown;
+        messages?: unknown[];
+      };
+    }) {
+      this.state = {
+        systemPrompt: options?.initialState?.systemPrompt ?? "",
+        thinkingLevel: options?.initialState?.thinkingLevel ?? "medium",
+        tools: options?.initialState?.tools ?? [],
+        messages: (options?.initialState?.messages as string[]) ?? [],
+        model: options?.initialState?.model,
+      };
+      MockAgent.instances.push(this);
+    }
+
+    get systemPrompt() {
+      return this.state.systemPrompt;
+    }
+
+    get thinkingLevel() {
+      return this.state.thinkingLevel;
+    }
+
+    get tools() {
+      return this.state.tools;
+    }
+
+    get messages() {
+      return this.state.messages;
+    }
+
+    subscribe(fn: (event: AgentEvent) => void) {
+      this.listeners.add(fn);
+      return () => {
+        this.listeners.delete(fn);
+      };
+    }
+
+    async prompt(message: string) {
+      this.state.messages.push(message);
+      for (const event of MockAgent.events) {
+        for (const listener of this.listeners) {
+          listener(event);
+        }
+      }
+    }
+  }
+
+  return { Agent: MockAgent };
+});
+
+import { startSession } from "../src/index.js";
+import { collectChunks, MemoryIO } from "./test-helpers.js";
+
+const MockAgentClass = (await import("@mariozechner/pi-agent-core")).Agent as unknown as {
+  events: AgentEvent[];
+  instances: Array<{
+    systemPrompt: string;
+    thinkingLevel: string;
+    tools: Array<{ name: string }>;
+    messages: string[];
+    state: {
+      systemPrompt: string;
+      thinkingLevel: string;
+      tools: Array<{ name: string }>;
+      messages: string[];
+      model?: unknown;
+    };
+  }>;
+};
+
+describe("coding agent session", () => {
+  beforeEach(() => {
+    MockAgentClass.events = [];
+    MockAgentClass.instances.length = 0;
+    completeSimple.mockReset();
+    streamSimple.mockReset();
+    process.env.ANTHROPIC_API_KEY = "test-key";
+  });
+
+  it("runs standard mode as a direct coding agent", async () => {
+    MockAgentClass.events = [
+      {
+        type: "tool_execution_start",
+        toolCallId: "1",
+        toolName: "read_file",
+        args: { path: "src/index.ts" },
+      },
+      {
+        type: "tool_execution_end",
+        toolCallId: "1",
+        toolName: "read_file",
+        result: { ok: true },
+        isError: false,
+      },
+      {
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "Implemented the change." }],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+      },
+      {
+        type: "turn_end",
+        message: {
+          role: "assistant",
+          content: [],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+        toolResults: [
+          {
+            role: "toolResult",
+            toolCallId: "1",
+            toolName: "read_file",
+            content: [{ type: "text", text: "..." }],
+            isError: false,
+            timestamp: Date.now(),
+          },
+        ],
+      },
+    ];
+
+    const io = new MemoryIO();
+    const session = await startSession("/tmp/project", io);
+    session.setMode("standard");
+    const chunks = await collectChunks(session.sendMessage("Inspect src/index.ts and implement the fix"));
+
+    expect(chunks).toEqual([
+      { kind: "text", value: "[tool] read_file src/index.ts\n" },
+      { kind: "text", value: "[tool] read_file completed\n" },
+      { kind: "text", value: "Implemented the change.\n" },
+    ]);
+    expect(session.state.activeMilestone).toBe("Direct coding execution");
+    expect(session.state.activeSubProblem).toBe("Ready for the next coding task");
+    expect(session.state.modePhase).toBe("idle");
+    expect(session.getTrail().some((entry) => entry.type === "bypass")).toBe(true);
+  });
+
+  it("updates the agent prompt when mode or shared files change", async () => {
+    const io = new MemoryIO();
+    const session = await startSession("/tmp/project", io);
+    const agent = MockAgentClass.instances[0];
+
+    expect(agent?.tools.map((tool) => tool.name).sort()).toEqual([
+      "list_files",
+      "read_file",
+      "run_command",
+      "search_files",
+      "write_file",
+    ]);
+    expect(agent?.systemPrompt).toContain(
+      "Start by inspecting the relevant code and building a concrete implementation plan before any coding."
+    );
+    expect(agent?.systemPrompt).toContain(
+      "Do not install packages, create virtual environments, or diagnose unrelated dependencies unless the user asked for environment help or the task is blocked on a confirmed missing dependency."
+    );
+
+    session.setMode("socratic");
+    expect(agent?.thinkingLevel).toBe("high");
+    expect(agent?.systemPrompt).toContain("Current mode: socratic.");
+    expect(agent?.systemPrompt).toContain(
+      "Before each phase executes, require the user to explain that phase's goal, file ownership, and verification path back in their own words."
+    );
+
+    await session.shareFile("/tmp/project/src/app.ts");
+    expect(agent?.systemPrompt).toContain("/tmp/project/src/app.ts");
+  });
+
+  it("pauses guided mode after the plan and before each phase execution", async () => {
+    MockAgentClass.events = [
+      {
+        type: "tool_execution_start",
+        toolCallId: "guided-1",
+        toolName: "write_file",
+        args: { path: "docs/modes.md" },
+      },
+      {
+        type: "tool_execution_end",
+        toolCallId: "guided-1",
+        toolName: "write_file",
+        result: { ok: true },
+        isError: false,
+      },
+      {
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "Implemented the approved plan." }],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+      },
+      {
+        type: "turn_end",
+        message: {
+          role: "assistant",
+          content: [],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+        toolResults: [],
+      },
+    ];
+
+    const io = new MemoryIO();
+    const session = await startSession("/tmp/project", io);
+    const firstTurn = await collectChunks(
+      session.sendMessage("Implement distinct mode behavior for the coding agent.")
+    );
+
+    expect(firstTurn[0]).toEqual(
+      expect.objectContaining({
+        kind: "text",
+        value: expect.stringContaining("Guided mode is mapping the work before any coding starts."),
+      })
+    );
+    expect(
+      firstTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("Guided mode is ready for phase 1"))
+    ).toBe(true);
+    expect(firstTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("Do you understand phase 1"))).toBe(
+      true
+    );
+    expect(MockAgentClass.instances[0]?.messages).toHaveLength(0);
+    expect(session.state.modePhase).toBe("awaiting-approval");
+
+    const secondTurn = await collectChunks(session.sendMessage("yes, go ahead"));
+    expect(secondTurn[0]).toEqual(
+      expect.objectContaining({
+        kind: "text",
+        value: expect.stringContaining("Executing phase 1"),
+      })
+    );
+    expect(
+      secondTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("Implemented the approved plan."))
+    ).toBe(true);
+    expect(
+      secondTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("Guided mode is ready for phase 2"))
+    ).toBe(true);
+    expect(MockAgentClass.instances[0]?.messages[0]).toContain("Execute only phase 1");
+    expect(session.state.activeMilestone).toBe("Guided build-up");
+    expect(session.state.modePhase).toBe("awaiting-approval");
+  });
+
+  it("does not enter guided planning for quick-help questions", async () => {
+    MockAgentClass.events = [
+      {
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "An array is an ordered collection of values." }],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+      },
+      {
+        type: "turn_end",
+        message: {
+          role: "assistant",
+          content: [],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+        toolResults: [],
+      },
+    ];
+
+    const io = new MemoryIO();
+    const session = await startSession("/tmp/project", io);
+    const chunks = await collectChunks(session.sendMessage("what is an array?"));
+
+    expect(chunks).toEqual([{ kind: "text", value: "An array is an ordered collection of values.\n" }]);
+    expect(chunks.some((chunk) => chunk.kind === "text" && chunk.value.includes("Guided mode is mapping"))).toBe(false);
+    expect(MockAgentClass.instances[0]?.messages).toEqual(["what is an array?"]);
+    expect(session.state.modePhase).toBe("idle");
+  });
+
+  it("streams assistant text updates before the final message ends", async () => {
+    MockAgentClass.events = [
+      {
+        type: "message_start",
+        message: {
+          role: "assistant",
+          content: [],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+      },
+      {
+        type: "message_update",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "Hello there" }],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+        assistantMessageEvent: {
+          type: "text_delta",
+          delta: "Hello there",
+        },
+      },
+      {
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "Hello there" }],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+      },
+      {
+        type: "turn_end",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "Hello there" }],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+        toolResults: [],
+      },
+    ];
+
+    const io = new MemoryIO();
+    const session = await startSession("/tmp/project", io);
+    const chunks = await collectChunks(session.sendMessage("hello"));
+
+    expect(chunks).toEqual([
+      { kind: "text", value: "Hello there" },
+      { kind: "text", value: "\n" },
+    ]);
+    expect(MockAgentClass.instances[0]?.messages).toEqual(["hello"]);
+  });
+
+  it("runs socratic mode as a phased quiz-driven flow", async () => {
+    MockAgentClass.events = [
+      {
+        type: "tool_execution_start",
+        toolCallId: "socratic-1",
+        toolName: "write_file",
+        args: { path: "docs/modes.md" },
+      },
+      {
+        type: "tool_execution_end",
+        toolCallId: "socratic-1",
+        toolName: "write_file",
+        result: { ok: true },
+        isError: false,
+      },
+      {
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "Executed the current phase." }],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+      },
+      {
+        type: "turn_end",
+        message: {
+          role: "assistant",
+          content: [],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+        toolResults: [],
+      },
+    ];
+
+    const io = new MemoryIO();
+    const session = await startSession("/tmp/project", io);
+    session.setMode("socratic");
+
+    const firstTurn = await collectChunks(
+      session.sendMessage("Implement distinct mode behavior for the coding agent.")
+    );
+    expect(
+      firstTurn.some(
+        (chunk) =>
+          chunk.kind === "text" && chunk.value.includes("Socratic mode is mapping the work before any coding starts.")
+      )
+    ).toBe(true);
+    expect(
+      firstTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("Socratic mode is ready for phase 1"))
+    ).toBe(true);
+    expect(firstTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("Before I execute phase 1"))).toBe(
+      true
+    );
+    expect(MockAgentClass.instances[0]?.messages).toHaveLength(0);
+    expect(session.state.modePhase).toBe("awaiting-validation");
+
+    const secondTurn = await collectChunks(session.sendMessage("I do not know yet."));
+    expect(secondTurn).toEqual([
+      expect.objectContaining({
+        kind: "text",
+        value: expect.stringContaining("Tighten the explanation"),
+      }),
+    ]);
+    expect(MockAgentClass.instances[0]?.messages).toHaveLength(0);
+    expect(session.state.modePhase).toBe("awaiting-validation");
+
+    const thirdTurn = await collectChunks(
+      session.sendMessage(
+        "Phase 1 shapes the mode contract. I would change docs/modes.md and coding-agent/session.ts first, then verify the behavior with the session tests."
+      )
+    );
+    expect(thirdTurn[0]).toEqual(
+      expect.objectContaining({
+        kind: "text",
+        value: expect.stringContaining("Your answer is partially correct."),
+      })
+    );
+    expect(thirdTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("Score: 8/13"))).toBe(true);
+    expect(thirdTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("Stronger answer:"))).toBe(true);
+    expect(thirdTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("should I execute phase 1"))).toBe(
+      true
+    );
+    expect(MockAgentClass.instances[0]?.messages).toHaveLength(0);
+    expect(session.state.modePhase).toBe("awaiting-approval");
+
+    const fourthTurn = await collectChunks(session.sendMessage("yes, execute it"));
+    expect(fourthTurn[0]).toEqual(
+      expect.objectContaining({
+        kind: "text",
+        value: expect.stringContaining("Executing phase 1"),
+      })
+    );
+    expect(
+      fourthTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("Executed the current phase."))
+    ).toBe(true);
+    expect(MockAgentClass.instances[0]?.messages[0]).toContain("Execute only phase 1");
+    expect(
+      fourthTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("Socratic mode is ready for phase 2"))
+    ).toBe(true);
+    expect(fourthTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("Before I execute phase 2"))).toBe(
+      true
+    );
+    expect(session.state.modePhase).toBe("awaiting-validation");
+    const architecture = Array.from(io.writes.entries()).find(([path]) => path.endsWith("ARCHITECTURE.md"))?.[1];
+    expect(architecture).toContain("Status: completed");
+  });
+
+  it("routes debug requests through the socratic loop instead of executing immediately", async () => {
+    const io = new MemoryIO();
+    const session = await startSession("/tmp/project", io);
+    session.setMode("socratic");
+
+    const firstTurn = await collectChunks(session.sendMessage("Why does the app crash on startup after I added auth?"));
+
+    expect(
+      firstTurn.some(
+        (chunk) =>
+          chunk.kind === "text" && chunk.value.includes("Socratic mode is mapping the work before any coding starts.")
+      )
+    ).toBe(true);
+    expect(firstTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("Before I execute phase 1"))).toBe(
+      true
+    );
+    expect(MockAgentClass.instances[0]?.messages).toHaveLength(0);
+    expect(session.state.modePhase).toBe("awaiting-validation");
+  });
+
+  it("getMessages returns an empty array before any exchange", async () => {
+    const io = new MemoryIO();
+    const session = await startSession("/tmp/project", io);
+    expect(session.getMessages()).toEqual([]);
+  });
+
+  it("restores initialMessages into the agent when provided", async () => {
+    const initial = [{ role: "user", content: [{ type: "text", text: "hi" }], timestamp: 0 }];
+    const io = new MemoryIO();
+    const session = await startSession("/tmp/project", io, undefined, initial as never);
+    expect(session.getMessages()).toEqual(initial);
+  });
+
+  it("exports a markdown trail and warns when pdf is requested", async () => {
+    MockAgentClass.events = [
+      {
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "Checked the files and I am ready." }],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+      },
+      {
+        type: "turn_end",
+        message: {
+          role: "assistant",
+          content: [],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+        toolResults: [],
+      },
+    ];
+
+    const io = new MemoryIO();
+    const session = await startSession("/tmp/project", io);
+
+    await collectChunks(session.sendMessage("Check the repo"));
+    await session.exportTrail("/tmp/trail.md", "pdf");
+
+    const markdown = io.writes.get("/tmp/trail.md");
+    expect(markdown).toContain("# Struggle AI Learning Trail");
+    expect(markdown).toContain("## Transcript");
+    expect(io.notifications.some((item) => item.level === "warn")).toBe(true);
+  });
+
+  it("exports AI notes and ADR artifacts from the current trail", async () => {
+    MockAgentClass.events = [
+      {
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "Inspected src/index.ts and updated the implementation plan." }],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+      },
+      {
+        type: "turn_end",
+        message: {
+          role: "assistant",
+          content: [],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+        toolResults: [],
+      },
+    ];
+    completeSimple.mockImplementation(async (_model, context) => {
+      if (
+        typeof context.systemPrompt === "string" &&
+        (context.systemPrompt.includes("Return valid JSON only") ||
+          context.systemPrompt.includes("Architecture Decision Record"))
+      ) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                id: "adr-1",
+                title: "Keep trail artifacts separate",
+                context: "The session now distinguishes raw trail export from AI-generated notes and ADR output.",
+                decision: "Expose /trail export, /trail notes, and /trail adr as separate commands.",
+                consequences: "Users can choose the right artifact without overloading one command.",
+                concepts: ["Command clarity", "Trail artifacts"],
+                risks: ["Users may generate an ADR before the decision is mature."],
+                docLinks: ["https://www.typescriptlang.org/docs/"],
+                createdAt: "2026-04-25T00:00:00.000Z",
+              }),
+            },
+          ],
+        };
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: "# Session Notes\n\n## Learnings\n- The session separated raw and generated trail artifacts.\n",
+          },
+        ],
+      };
+    });
+
+    const io = new MemoryIO();
+    const session = await startSession("/tmp/project", io);
+
+    await collectChunks(session.sendMessage("Separate the trail commands so notes and ADRs are distinct."));
+    await session.exportTrailNotes("/tmp/trail-notes.md");
+    await session.exportTrailADR("/tmp/trail-adr.md");
+
+    expect(io.writes.get("/tmp/trail-notes.md")).toContain("# Session Notes");
+    expect(io.writes.get("/tmp/trail-adr.md")).toContain("# Keep trail artifacts separate");
+    expect(session.getTrail().some((entry) => entry.type === "artifact_export")).toBe(true);
+  });
+});
