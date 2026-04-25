@@ -107,8 +107,10 @@ console.log(chunks);
 - `invokeStuck()`: emit a stuck-session intervention
 - `invokeHint(level)`: emit a coding hint at level `1`, `2`, or `3`
 - `exportTrail(outputPath, format)`: write a Markdown transcript trail
+- `exportTrailNotes(outputPath)`: write AI-generated Markdown notes for the current trail
+- `exportTrailADR(outputPath)`: write an ADR draft for the current project based on the trail
 - `getTrail()`: read accumulated trail entries
-- `getADRs()`: returns an empty array in the current coding-agent runtime
+- `getADRs()`: read any ADRs captured during the session runtime
 
 ### Modes
 
@@ -145,6 +147,8 @@ The public `ResponseChunk` type still includes richer variants, but the live cod
 ## Trail Export
 
 `exportTrail(path, format)` currently writes Markdown. If `format` is `"pdf"`, core still writes Markdown and emits a warning through `io.notify()`.
+
+`exportTrailNotes(path)` and `exportTrailADR(path)` use the active LLM configuration to generate Markdown artifacts from the current session trail. If generation fails, core falls back to deterministic Markdown so the command still produces an artifact.
 
 Exported trails include:
 

@@ -2,7 +2,9 @@ import { basename, join } from "node:path";
 
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import { generateADR } from "../artifacts/adr.js";
+import { generateSessionNotesMarkdown } from "../artifacts/session-notes.js";
 import { renderTrailMarkdown } from "../artifacts/trail.js";
+import { generateTrailADR, renderADRMarkdown } from "../artifacts/trail-adr.js";
 import { DEFAULT_CONFIGS } from "../config.js";
 import { classifyIntentWithDeps } from "../gate/classifier.js";
 import {
@@ -641,6 +643,9 @@ export async function createSessionEngine(projectPath: string, io: IO, config?: 
 
   return {
     state,
+    abort() {
+      // No-op for the simplified engine implementation.
+    },
     async *sendMessage(message: string) {
       touchState(state);
       pushTrail("user_turn", { message }, runtime.activeIntent);
@@ -761,10 +766,24 @@ export async function createSessionEngine(projectPath: string, io: IO, config?: 
     async exportTrail(outputPath: string, format: "md" | "pdf") {
       const markdown = renderTrailMarkdown(state, trail, adrs, runtime.modeHistory);
       await io.writeFile(outputPath, markdown);
-      pushTrail("session_end", { exportedTo: outputPath, requestedFormat: format }, runtime.activeIntent);
+      pushTrail("artifact_export", { kind: "trail", exportedTo: outputPath, requestedFormat: format }, runtime.activeIntent);
       if (format === "pdf") {
         io.notify("warn", "PDF export is not available in core yet; wrote Markdown instead.");
       }
+    },
+    async exportTrailNotes(outputPath: string) {
+      const markdown = await generateSessionNotesMarkdown({ state, trail, adrs, modeHistory: runtime.modeHistory }, llm, io);
+      await io.writeFile(outputPath, markdown);
+      pushTrail("artifact_export", { kind: "notes", exportedTo: outputPath, requestedFormat: "md" }, runtime.activeIntent);
+    },
+    async exportTrailADR(outputPath: string) {
+      const adr = await generateTrailADR({ state, trail, adrs, modeHistory: runtime.modeHistory }, llm, io);
+      await io.writeFile(outputPath, renderADRMarkdown(adr));
+      pushTrail(
+        "artifact_export",
+        { kind: "adr", exportedTo: outputPath, requestedFormat: "md", title: adr.title },
+        runtime.activeIntent
+      );
     },
     getTrail() {
       return [...trail];

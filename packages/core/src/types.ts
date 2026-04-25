@@ -61,6 +61,7 @@ export type TrailEntryType =
   | "stuck_session"
   | "hint"
   | "bypass"
+  | "artifact_export"
   | "session_end";
 
 export interface TrailEntry {

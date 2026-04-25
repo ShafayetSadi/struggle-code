@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createProgram, formatPrompt, parseSlashCommand } from "../src/index.js";
-import { ROOT_MENU_TEXT } from "../src/repl/commands.js";
+import { ROOT_MENU_TEXT, TRAIL_MENU_TEXT } from "../src/repl/commands.js";
 
 describe("cli entry", () => {
   it("loads without throwing and exposes a commander program", () => {
@@ -35,10 +35,19 @@ describe("cli entry", () => {
     });
     expect(parseSlashCommand("/logout")).toEqual({ kind: "logout" });
     expect(parseSlashCommand("/stuck")).toEqual({ kind: "stuck" });
+    expect(parseSlashCommand("/trail")).toEqual({ kind: "trail-menu" });
     expect(parseSlashCommand("/trail export notes/trail.md --format pdf")).toEqual({
       kind: "trail-export",
       path: "notes/trail.md",
       format: "pdf",
+    });
+    expect(parseSlashCommand("/trail notes notes/session.md")).toEqual({
+      kind: "trail-notes",
+      path: "notes/session.md",
+    });
+    expect(parseSlashCommand("/trail adr docs/decision.md")).toEqual({
+      kind: "trail-adr",
+      path: "docs/decision.md",
     });
     expect(parseSlashCommand("/resume")).toEqual({ kind: "resume" });
     expect(parseSlashCommand("/resume session-123")).toEqual({ kind: "resume", historyId: "session-123" });
@@ -51,7 +60,15 @@ describe("cli entry", () => {
     expect(ROOT_MENU_TEXT).toContain("Trigger a stuck-session intervention");
     expect(ROOT_MENU_TEXT).toContain("/resume");
     expect(ROOT_MENU_TEXT).toContain("List saved sessions or resume one by id");
+    expect(ROOT_MENU_TEXT).toContain("/trail notes");
+    expect(ROOT_MENU_TEXT).toContain("/trail adr");
     expect(ROOT_MENU_TEXT).toContain("/exit, /quit");
+  });
+
+  it("shows the dedicated trail command menu", () => {
+    expect(TRAIL_MENU_TEXT).toContain("/trail export");
+    expect(TRAIL_MENU_TEXT).toContain("/trail notes");
+    expect(TRAIL_MENU_TEXT).toContain("/trail adr");
   });
 
   it("formats the prompt with the active mode", () => {

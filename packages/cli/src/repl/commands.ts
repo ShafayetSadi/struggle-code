@@ -19,9 +19,20 @@ Commands:
   /new                      Start a fresh session
   /resume [session-id]      List saved sessions or resume one by id
   /stuck                    Trigger a stuck-session intervention
+  /trail                    Show trail artifact commands
   /trail export [path] [--format md|pdf]
-                            Export the learning trail
+                            Export the raw learning trail
+  /trail notes [path]       Generate AI notes from the current trail
+  /trail adr [path]         Generate an ADR draft for the current project
   /exit, /quit              Close the session
+`.trim();
+
+export const TRAIL_MENU_TEXT = `
+Trail commands:
+  /trail export [path] [--format md|pdf]
+                            Export the raw learning trail
+  /trail notes [path]       Generate AI notes from the current trail
+  /trail adr [path]         Generate an ADR draft for the current project
 `.trim();
 
 export const LOGIN_MENU_TEXT = `
@@ -101,10 +112,20 @@ export function parseSlashCommand(input: string): SlashCommand | undefined {
     case "stuck":
       return { kind: "stuck" };
     case "trail": {
-      if (args[0] !== "export") return { kind: "root-menu" };
-      const path = args.find((v) => !v.startsWith("--") && v !== "export");
-      const format = args.includes("--format") && args[args.indexOf("--format") + 1] === "pdf" ? "pdf" : "md";
-      return path ? { kind: "trail-export", path, format } : { kind: "trail-export", format };
+      if (args.length === 0) return { kind: "trail-menu" };
+      const subcommand = args[0];
+      const path = args.find((v) => !v.startsWith("--") && v !== subcommand);
+      if (subcommand === "export") {
+        const format = args.includes("--format") && args[args.indexOf("--format") + 1] === "pdf" ? "pdf" : "md";
+        return path ? { kind: "trail-export", path, format } : { kind: "trail-export", format };
+      }
+      if (subcommand === "notes") {
+        return path ? { kind: "trail-notes", path } : { kind: "trail-notes" };
+      }
+      if (subcommand === "adr") {
+        return path ? { kind: "trail-adr", path } : { kind: "trail-adr" };
+      }
+      return { kind: "trail-menu" };
     }
     default:
       return { kind: "root-menu" };
@@ -117,9 +138,8 @@ export function syncHintState(session: Session, state: ReplState): void {
   }
 }
 
-function defaultTrailPath(projectPath: string, session: Session, format: "md" | "pdf"): string {
-  const suffix = format === "pdf" ? "pdf" : "md";
-  return join(projectPath, ".struggle-ai", `trail-${session.state.id}.${suffix}`);
+function defaultTrailPath(projectPath: string, session: Session, stem: "trail" | "trail-notes" | "trail-adr", format = "md"): string {
+  return join(projectPath, ".struggle-ai", `${stem}-${session.state.id}.${format}`);
 }
 
 export async function streamChunks<T>(iterable: AsyncIterable<T>, onChunk: (chunk: T) => void): Promise<void> {
@@ -149,6 +169,9 @@ export async function handleSlashCommand(
       return "continue";
     case "mode-menu":
       writeLines(MODE_MENU_TEXT.split("\n"));
+      return "continue";
+    case "trail-menu":
+      writeLines(TRAIL_MENU_TEXT.split("\n"));
       return "continue";
     case "providers-menu":
       writeLines(await handleProviderCommand());
@@ -186,9 +209,21 @@ export async function handleSlashCommand(
     case "trail-export": {
       const outputPath = command.path
         ? resolve(projectPath, command.path)
-        : defaultTrailPath(projectPath, session, command.format);
+        : defaultTrailPath(projectPath, session, "trail", command.format);
       await session.exportTrail(outputPath, command.format);
       writeLine(chalk.hex(P.green)(`trail exported  ${outputPath}`));
+      return "continue";
+    }
+    case "trail-notes": {
+      const outputPath = command.path ? resolve(projectPath, command.path) : defaultTrailPath(projectPath, session, "trail-notes");
+      await session.exportTrailNotes(outputPath);
+      writeLine(chalk.hex(P.green)(`trail notes exported  ${outputPath}`));
+      return "continue";
+    }
+    case "trail-adr": {
+      const outputPath = command.path ? resolve(projectPath, command.path) : defaultTrailPath(projectPath, session, "trail-adr");
+      await session.exportTrailADR(outputPath);
+      writeLine(chalk.hex(P.green)(`trail adr exported  ${outputPath}`));
       return "continue";
     }
   }

@@ -1,7 +1,14 @@
 import type { AgentEvent } from "@mariozechner/pi-agent-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const { completeSimple, streamSimple } = vi.hoisted(() => ({
+  completeSimple: vi.fn(),
+  streamSimple: vi.fn(),
+}));
+
 vi.mock("@mariozechner/pi-ai", () => ({
+  completeSimple,
+  streamSimple,
   getModel: vi.fn(() => ({
     api: "anthropic-messages",
     provider: "anthropic",
@@ -118,6 +125,9 @@ describe("coding agent session", () => {
   beforeEach(() => {
     MockAgentClass.events = [];
     MockAgentClass.instances.length = 0;
+    completeSimple.mockReset();
+    streamSimple.mockReset();
+    process.env.ANTHROPIC_API_KEY = "test-key";
   });
 
   it("runs standard mode as a direct coding agent", async () => {
@@ -823,5 +833,97 @@ describe("coding agent session", () => {
     expect(markdown).toContain("# Struggle AI Learning Trail");
     expect(markdown).toContain("## Transcript");
     expect(io.notifications.some((item) => item.level === "warn")).toBe(true);
+  });
+
+  it("exports AI notes and ADR artifacts from the current trail", async () => {
+    MockAgentClass.events = [
+      {
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "Inspected src/index.ts and updated the implementation plan." }],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+      },
+      {
+        type: "turn_end",
+        message: {
+          role: "assistant",
+          content: [],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "fake-model",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        },
+        toolResults: [],
+      },
+    ];
+    completeSimple.mockImplementation(async (_model, context) => {
+      if (
+        typeof context.systemPrompt === "string" &&
+        (context.systemPrompt.includes("Return valid JSON only") ||
+          context.systemPrompt.includes("Architecture Decision Record"))
+      ) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                id: "adr-1",
+                title: "Keep trail artifacts separate",
+                context: "The session now distinguishes raw trail export from AI-generated notes and ADR output.",
+                decision: "Expose /trail export, /trail notes, and /trail adr as separate commands.",
+                consequences: "Users can choose the right artifact without overloading one command.",
+                concepts: ["Command clarity", "Trail artifacts"],
+                risks: ["Users may generate an ADR before the decision is mature."],
+                docLinks: ["https://www.typescriptlang.org/docs/"],
+                createdAt: "2026-04-25T00:00:00.000Z",
+              }),
+            },
+          ],
+        };
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: "# Session Notes\n\n## Learnings\n- The session separated raw and generated trail artifacts.\n",
+          },
+        ],
+      };
+    });
+
+    const io = new MemoryIO();
+    const session = await startSession("/tmp/project", io);
+
+    await collectChunks(session.sendMessage("Separate the trail commands so notes and ADRs are distinct."));
+    await session.exportTrailNotes("/tmp/trail-notes.md");
+    await session.exportTrailADR("/tmp/trail-adr.md");
+
+    expect(io.writes.get("/tmp/trail-notes.md")).toContain("# Session Notes");
+    expect(io.writes.get("/tmp/trail-adr.md")).toContain("# Keep trail artifacts separate");
+    expect(session.getTrail().some((entry) => entry.type === "artifact_export")).toBe(true);
   });
 });

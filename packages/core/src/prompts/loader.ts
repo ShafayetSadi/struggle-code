@@ -19,7 +19,9 @@ export type PromptName =
   | "stuck-diagnostic.md"
   | "hint-L1.md"
   | "hint-L2.md"
-  | "hint-L3.md";
+  | "hint-L3.md"
+  | "trail-notes.md"
+  | "trail-adr.md";
 
 function bundledPromptPath(name: PromptName): string {
   return resolve(getCurrentDir(), name);

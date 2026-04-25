@@ -8,12 +8,15 @@ import type { ADR, Intent, IO, Mode, ProviderConfig, ResponseChunk, SessionState
 export interface Session {
   state: SessionState;
   sendMessage(message: string): AsyncIterable<ResponseChunk>;
+  abort(): void;
   setMode(mode: Mode): void;
   setProviderConfig(config: ProviderConfig): void;
   shareFile(path: string): Promise<void>;
   invokeStuck(): AsyncIterable<ResponseChunk>;
   invokeHint(level: 1 | 2 | 3): AsyncIterable<ResponseChunk>;
   exportTrail(outputPath: string, format: "md" | "pdf"): Promise<void>;
+  exportTrailNotes(outputPath: string): Promise<void>;
+  exportTrailADR(outputPath: string): Promise<void>;
   getTrail(): TrailEntry[];
   getADRs(): ADR[];
   getMessages(): AgentMessage[];

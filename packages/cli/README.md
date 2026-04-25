@@ -73,7 +73,10 @@ npm exec --workspace packages/cli struggle -- --provider openrouter --model open
 - `/logout` clears saved credentials for the active provider
 - `/mode <guided|standard|socratic>` switches session mode
 - `/stuck` triggers a stuck-session intervention
-- `/trail export [path] [--format md|pdf]` writes the current trail
+- `/trail` shows the trail artifact subcommands
+- `/trail export [path] [--format md|pdf]` writes the raw current trail
+- `/trail notes [path]` writes AI-generated session notes from the current trail
+- `/trail adr [path]` writes an ADR draft for the current project from the current trail
 - `/exit` or `/quit` quits the REPL
 
 ### Mode Behavior
@@ -88,7 +91,7 @@ These modes now tune the coding agent prompt. They no longer select separate lea
 
 - text output renders tool activity and assistant responses
 - question chunks still render with a distinct prompt marker for `/stuck`
-- trail export remains available from the REPL
+- trail export, notes, and ADR generation remain available from the REPL
 
 ## Notes
 
