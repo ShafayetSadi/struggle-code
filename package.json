@@ -20,7 +20,7 @@
     "dev:landing": "npm run dev --workspace landing",
     "dev:vscode": "npm run dev --workspace struggle-ai-vscode",
     "publish:cli": "npm run build --workspace @struggle-ai/core && npm run build --workspace @struggle-ai/cli && npm publish --workspace @struggle-ai/cli --access public",
-    "publish:vscode": "npm run build --workspace struggle-ai-vscode && cd packages/vscode && npx @vscode/vsce publish"
+    "publish:vscode": "npm run build --workspace struggle-ai-vscode && cd packages/vscode && npx @vscode/vsce publish --no-dependencies"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.13",
