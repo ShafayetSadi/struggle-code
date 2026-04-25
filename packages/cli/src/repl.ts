@@ -199,7 +199,7 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
   process.stdout.write(chalk.hex(P.textPrimary).bold("Struggle AI") + chalk.hex(P.textMuted)("  interactive\n"));
   process.stdout.write(chalk.hex(P.textMuted)(`${COMMAND_HINT}\n\n`));
   if (options.resume) {
-    if (initialMessages) {
+    if (initialMessages && initialMessages.length > 0) {
       process.stdout.write(chalk.hex(P.textMuted)(`resumed ${initialMessages.length} messages from last session\n\n`));
     } else {
       process.stdout.write(chalk.hex(P.textMuted)("no saved history for this project — starting fresh\n\n"));
@@ -247,7 +247,7 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
             session = await startSession(projectPath, io, currentConfig, resumedMessages);
             replState.hintLevel = 1;
             replState.lastMilestone = session.state.activeMilestone;
-            if (resumedMessages) {
+            if (resumedMessages && resumedMessages.length > 0) {
               process.stdout.write(chalk.hex(P.green)(`resumed ${resumedMessages.length} messages from last session\n`));
             } else {
               process.stdout.write(chalk.hex(P.textMuted)("no saved history for this project — starting fresh\n"));
@@ -461,7 +461,7 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
   for (const line of pending.splice(0)) screen.append("system", line);
   screen.append("system", COMMAND_HINT);
   if (options.resume) {
-    if (initialMessages) {
+    if (initialMessages && initialMessages.length > 0) {
       screen.append("system", `resumed ${initialMessages.length} messages from last session`);
     } else {
       screen.append("system", "no saved history for this project — starting fresh");
@@ -604,7 +604,7 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
           replState.lastMilestone = session.state.activeMilestone;
           screen.setMode(session.state.mode);
           screen.setActiveSubProblem(session.state.activeSubProblem);
-          const notice = resumedMessages
+          const notice = resumedMessages && resumedMessages.length > 0
             ? `resumed ${resumedMessages.length} messages from last session`
             : "no saved history for this project — starting fresh";
           screen.append("system", notice);

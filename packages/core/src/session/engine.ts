@@ -773,6 +773,7 @@ export async function createSessionEngine(projectPath: string, io: IO, config?: 
       return [...adrs];
     },
     getMessages(): AgentMessage[] {
+      // stub: this engine uses LLMAdapter, not Agent — no transcript to replay
       return [];
     },
   };
