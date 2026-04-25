@@ -74,7 +74,6 @@ npm exec --workspace packages/cli struggle -- --provider openrouter --model open
 - `/mode <guided|standard|socratic>` switches session mode
 - `/share <path>` adds a file to the active session context
 - `/stuck` triggers a stuck-session intervention
-- `/hint [1|2|3]` asks for a hint; omitted level auto-increments per milestone
 - `/trail export [path] [--format md|pdf]` writes the current trail
 - `/exit` or `/quit` quits the REPL
 

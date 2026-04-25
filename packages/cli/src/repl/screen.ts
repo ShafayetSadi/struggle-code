@@ -191,7 +191,7 @@ export class ReplScreen {
           current === "/provider" ||
           current === "/mode";
         const isInsideSubmenu = /\s$/.test(currentRaw);
-        const shouldUseInlineSubmenuSelect = isInsideSubmenu && current !== "/mode";
+        const shouldUseInlineSubmenuSelect = isInsideSubmenu && current !== "/mode" && current !== "/help";
 
         if (selected && (shouldUseInlineSubmenuSelect || (!isSubmenuTrigger && selectedValue !== current))) {
           this.input.setValue(selected.value);

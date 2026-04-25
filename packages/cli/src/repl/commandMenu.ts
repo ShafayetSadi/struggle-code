@@ -5,7 +5,7 @@ import { Key, padToWidth, truncateToWidth } from "../pi-tui/src/index.js";
 import { chalk, P } from "./palette.js";
 
 const TOP_LEVEL_ITEMS: SelectItem[] = [
-  { value: "/help ", label: "/help", description: "Hints & stuck commands" },
+  { value: "/help", label: "/help", description: "Show all available commands" },
   { value: "/login", label: "/login", description: "Show available OAuth login providers" },
   { value: "/providers", label: "/providers", description: "Show providers or switch the active provider" },
   { value: "/logout", label: "/logout", description: "Clear saved credentials for the active provider" },
@@ -16,16 +16,10 @@ const TOP_LEVEL_ITEMS: SelectItem[] = [
   { value: "/new", label: "/new", description: "Start a fresh session" },
   { value: "/resume ", label: "/resume", description: "List saved sessions or resume one by id" },
   { value: "/share ", label: "/share", description: "Share a file with the session" },
+  { value: "/stuck", label: "/stuck", description: "Start the stuck diagnostic flow" },
   { value: "/trail export", label: "/trail export", description: "Export the session trail" },
   { value: "/exit", label: "/exit", description: "Close the session" },
   { value: "/quit", label: "/quit", description: "Close the session" },
-];
-
-const HELP_ITEMS: SelectItem[] = [
-  { value: "/hint", label: "/hint", description: "Ask for the next hint" },
-  { value: "/hint 2", label: "/hint 2", description: "Stronger hint" },
-  { value: "/hint 3", label: "/hint 3", description: "Strongest hint" },
-  { value: "/stuck", label: "/stuck", description: "Start the stuck diagnostic flow" },
 ];
 
 const MODE_ITEMS: SelectItem[] = [
@@ -91,7 +85,7 @@ export function setAvailableProviders(providers: Provider[]): void {
 }
 
 function getAllItems(): SelectItem[] {
-  return [...TOP_LEVEL_ITEMS, ...HELP_ITEMS, ...LOGIN_ITEMS, ...providerItems];
+  return [...TOP_LEVEL_ITEMS, ...LOGIN_ITEMS, ...providerItems];
 }
 
 type MenuContext = "root" | "help" | "login" | "providers" | "mode" | "search";
@@ -111,7 +105,7 @@ function itemsForContext(context: MenuContext, query: string): SelectItem[] {
     case "root":
       return TOP_LEVEL_ITEMS;
     case "help":
-      return HELP_ITEMS;
+      return TOP_LEVEL_ITEMS;
     case "login":
       return LOGIN_ITEMS;
     case "providers":
@@ -155,7 +149,7 @@ function headerForContext(context: MenuContext): string {
     case "root":
       return "  Commands";
     case "help":
-      return "  /help - hints & stuck";
+      return "  /help - all commands";
     case "login":
       return "  /login - OAuth providers";
     case "providers":

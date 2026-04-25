@@ -4,9 +4,6 @@ import { padToWidth, renderPanel, SelectList } from "../pi-tui/src/index.js";
 import { chalk, P } from "./palette.js";
 
 export const HELP_MENU_ITEMS: SelectItem[] = [
-  { value: "/hint", label: "/hint", description: "Ask for the next hint" },
-  { value: "/hint 2", label: "/hint 2", description: "Ask for a stronger hint" },
-  { value: "/hint 3", label: "/hint 3", description: "Ask for the strongest hint" },
   { value: "/stuck", label: "/stuck", description: "Start the stuck diagnostic flow" },
 ];
 
