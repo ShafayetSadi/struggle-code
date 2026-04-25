@@ -2,7 +2,7 @@
   "name": "struggle-ai-vscode",
   "displayName": "Struggle AI",
   "description": "A Socratic coding mentor that guides you through problems with questions, not answers. Requires @struggle-ai/cli installed globally.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "TonmayHossainJifat",
   "author": "Struggle AI",
   "license": "MIT",
