@@ -1,0 +1,47 @@
+{
+  "id": "5c522329-568e-4ca2-b4dc-be72696939cd",
+  "title": "hi",
+  "savedAt": "2026-04-25T11:34:43.541Z",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "hi"
+        }
+      ],
+      "timestamp": 1777116880826
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "Hello! How can I help you today with your project in `packages/cli`?",
+          "textSignature": "EvUBCvIBAQw51sevF2ywstn+nfx4zgAyeRYHncpKN9O/cpWcUpYoTh1yxYdKeG2wAI1W9O1psmBbNc48OT92nhR8QEnuw4ncw5ekElBBC36YbpRIA2lWbijCmko9VbwH9JqzRSXjz5qjE2OiLa0ZkyKtmrYnFAbIsMAd23rOBbUf3nhb/Ic9voFFRasf7BvfP0fG2fh0I9CNu124CJ+HjDuyX8cp5uvJLbErod0TzHYOC18VJPyDsYb5nVXFJBxTwePl4Tbj2V90xckwpxd/9xH4OaMIDpoTMFrVWbh2hQ1Iajf08SxayEmSBkShLynWKg3IcfFGSC4="
+        }
+      ],
+      "api": "google-gemini-cli",
+      "provider": "google-antigravity",
+      "model": "gemini-3-flash",
+      "usage": {
+        "input": 727,
+        "output": 50,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 777,
+        "cost": {
+          "input": 0.0003635,
+          "output": 0.00015000000000000001,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0005135000000000001
+        }
+      },
+      "stopReason": "stop",
+      "timestamp": 1777116880828,
+      "responseId": "yKbsaZqdDaWAjMcPlOvN8As"
+    }
+  ]
+}

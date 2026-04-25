@@ -17,8 +17,19 @@ interface BuildPlanOptions {
   sharedFiles: string[];
 }
 
+interface AnswerScore {
+  goalUnderstanding: number;
+  fileOwnership: number;
+  responsibilitySeparation: number;
+  dataControlFlow: number;
+  verificationPlan: number;
+}
+
 interface BuildValidationResult {
   passed: boolean;
+  classification: "strong" | "partial" | "weak";
+  score: AnswerScore;
+  total: number;
   followUp?: string;
 }
 
@@ -26,6 +37,31 @@ const IGNORED_DIRS = new Set([".git", "node_modules", "dist", "coverage", ".turb
 
 function normalizeWhitespace(value: string): string {
   return value.replace(/\r/g, "").trim();
+}
+
+function clampScore(value: unknown, max: number): number {
+  const numeric = typeof value === "number" && Number.isFinite(value) ? Math.floor(value) : 0;
+  return Math.max(0, Math.min(max, numeric));
+}
+
+function sumScore(score: AnswerScore): number {
+  return (
+    score.goalUnderstanding +
+    score.fileOwnership +
+    score.responsibilitySeparation +
+    score.dataControlFlow +
+    score.verificationPlan
+  );
+}
+
+function classifyScore(total: number): "strong" | "partial" | "weak" {
+  if (total >= 10) {
+    return "strong";
+  }
+  if (total >= 6) {
+    return "partial";
+  }
+  return "weak";
 }
 
 function normalizeSlug(value: string, index: number): string {
@@ -476,7 +512,32 @@ export function formatGuidedApprovalPrompt(plan: ImplementationPlan, phaseIndex:
 }
 
 export function looksLikeApproval(message: string): boolean {
-  return /^(yes|yep|yeah|ok|okay|go|go ahead|continue|next|proceed|do it|ship it|sounds good)\b/i.test(message.trim());
+  return /^(yes|yep|yeah|ok|okay|approved|approve|go|go ahead|continue|next|proceed|do it|ship it|sounds good)\b/i.test(
+    message.trim()
+  );
+}
+
+export function looksLikeBypassRequest(message: string): boolean {
+  return /^(just\s+do\s+it|do\s+it|skip|continue|proceed|go\s+ahead|ship\s+it|i\s+don'?t\s+know)\b/i.test(
+    message.trim()
+  );
+}
+
+export function looksLikeGuidedContinuation(message: string): boolean {
+  const trimmed = message.trim();
+  if (!trimmed) {
+    return false;
+  }
+  if (looksLikeApproval(trimmed)) {
+    return true;
+  }
+  if (/[?？]\s*$/.test(trimmed)) {
+    return false;
+  }
+  if (/^(what|why|how|which|where|when|can you|could you|explain)\b/i.test(trimmed)) {
+    return false;
+  }
+  return trimmed.length >= 3;
 }
 
 export function buildPhaseExecutionPrompt(
@@ -544,6 +605,142 @@ export function formatExecutionApprovalPrompt(
   ].join("\n");
 }
 
+function normalizeEvaluationResult(raw: unknown, fallback: BuildValidationResult): BuildValidationResult {
+  if (typeof raw !== "object" || raw === null) {
+    return fallback;
+  }
+
+  const candidate = raw as {
+    score?: Partial<AnswerScore>;
+    followUp?: unknown;
+  };
+  const rawScore = candidate.score ?? {};
+  const score: AnswerScore = {
+    goalUnderstanding: clampScore(rawScore.goalUnderstanding, 2),
+    fileOwnership: clampScore(rawScore.fileOwnership, 3),
+    responsibilitySeparation: clampScore(rawScore.responsibilitySeparation, 3),
+    dataControlFlow: clampScore(rawScore.dataControlFlow, 3),
+    verificationPlan: clampScore(rawScore.verificationPlan, 2),
+  };
+  const total = sumScore(score);
+  const classification = classifyScore(total);
+  const passed =
+    total >= 10 && score.fileOwnership >= 2 && score.responsibilitySeparation >= 2 && score.verificationPlan >= 1;
+
+  return {
+    passed,
+    classification,
+    score,
+    total,
+    ...(typeof candidate.followUp === "string" ? { followUp: normalizeWhitespace(candidate.followUp) } : {}),
+  };
+}
+
+function scoreAnswerHeuristically(
+  plan: ImplementationPlan,
+  phaseIndex: number,
+  questions: ValidationQuestion[],
+  answer: string
+): AnswerScore {
+  const normalizedAnswer = answer.toLowerCase();
+  const phase = plan.phases[phaseIndex];
+  const phaseKeywords = [
+    ...(phase?.title ?? "").toLowerCase().split(/[^a-z0-9]+/),
+    ...(phase?.summary ?? "").toLowerCase().split(/[^a-z0-9]+/),
+  ].filter((word) => word.length >= 4);
+  const fileNames = (phase?.files ?? []).flatMap((file) =>
+    file.path
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((word) => word.length >= 3)
+  );
+  const responsibilityWords = ["own", "handle", "responsib", "controller", "service", "module", "boundary", "separate"];
+  const flowWords = ["flow", "request", "route", "call", "then", "through", "control", "data", "response"];
+  const verificationWords = ["test", "verify", "check", "expect", "assert", "run", "regress", "manual"];
+
+  const phaseHits = phaseKeywords.filter((keyword) => normalizedAnswer.includes(keyword)).length;
+  const fileHits = fileNames.filter((keyword) => normalizedAnswer.includes(keyword)).length;
+  const responsibilityHits = responsibilityWords.filter((keyword) => normalizedAnswer.includes(keyword)).length;
+  const flowHits = flowWords.filter((keyword) => normalizedAnswer.includes(keyword)).length;
+  const verificationHits = verificationWords.filter((keyword) => normalizedAnswer.includes(keyword)).length;
+  const questionHits = questions.filter((question) =>
+    question.expectedKeywords.some((keyword) => normalizedAnswer.includes(keyword.toLowerCase()))
+  ).length;
+
+  return {
+    goalUnderstanding: phaseHits > 1 || questionHits > 0 ? 2 : phaseHits === 1 ? 1 : 0,
+    fileOwnership: Math.min(3, fileHits + (fileHits > 0 && responsibilityHits > 0 ? 1 : 0)),
+    responsibilitySeparation: Math.min(3, responsibilityHits),
+    dataControlFlow: Math.min(3, flowHits),
+    verificationPlan: Math.min(2, verificationHits),
+  };
+}
+
+function buildStrongerAnswer(plan: ImplementationPlan, phaseIndex: number): string {
+  const phase = plan.phases[phaseIndex];
+  if (!phase) {
+    return "I would restate the goal, name the file boundary, describe the flow through the changed modules, and name the verification command or manual check.";
+  }
+
+  const files = phase.files
+    .map((file) => `${file.path} owns ${file.why.replace(/\.$/, "")}`)
+    .join("; ");
+  const verification =
+    phase.verification.length > 0
+      ? phase.verification.join("; ")
+      : "run the narrowest relevant test or manual check and confirm the expected behavior.";
+
+  return `Phase ${phaseIndex + 1} should ${phase.summary.replace(/\.$/, "")}. ${files || "The changed module should own the smallest relevant boundary."}. The flow should move through those responsibilities in order, without mixing unrelated concerns. I would verify it by: ${verification}`;
+}
+
+function buildSocraticFeedback(
+  plan: ImplementationPlan,
+  phaseIndex: number,
+  answer: string,
+  result: BuildValidationResult
+): string {
+  const missing: string[] = [];
+  if (result.score.goalUnderstanding < 2) missing.push("State the phase goal more concretely.");
+  if (result.score.fileOwnership < 2) missing.push("Name the main file or module that owns the change.");
+  if (result.score.responsibilitySeparation < 2) missing.push("Separate input/output, business logic, and shared boundaries.");
+  if (result.score.dataControlFlow < 2) missing.push("Describe how data or control moves through the system.");
+  if (result.score.verificationPlan < 1) missing.push("Include at least one verification step with an expected result.");
+
+  const understood: string[] = [];
+  if (result.score.goalUnderstanding > 0) understood.push("You were directionally close on the phase goal.");
+  if (result.score.fileOwnership > 0) understood.push("You mentioned at least part of the file/module boundary.");
+  if (result.score.verificationPlan > 0) understood.push("You included some verification instinct.");
+
+  const lines = [
+    result.classification === "partial" ? "Your answer is partially correct." : "Tighten the explanation before I continue.",
+    "",
+    `Score: ${result.total}/13`,
+    "",
+    "What you understood:",
+    ...(understood.length > 0 ? understood.map((item) => `- ${item}`) : ["- Not enough of the architecture was clear yet."]),
+    "",
+    "What is missing:",
+    ...missing.map((item) => `- ${item}`),
+    "",
+    "Your answer:",
+    answer.trim() || "(empty)",
+    "",
+    "Stronger answer:",
+    buildStrongerAnswer(plan, phaseIndex),
+    "",
+    "Why it matters:",
+    "This prevents blind approval: you should know the file ownership, the responsibility split, the execution flow, and how we will prove the phase worked.",
+  ];
+
+  if (result.classification === "partial") {
+    lines.push("", "Before I continue, confirm:", "Do you agree with this architecture and want me to execute this phase?");
+  } else {
+    lines.push("", result.followUp ?? "Reply with your explanation again, including the file boundary and verification path.");
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
 export async function evaluateValidationAnswer(
   llm: LLMAdapter,
   plan: ImplementationPlan,
@@ -551,27 +748,21 @@ export async function evaluateValidationAnswer(
   questions: ValidationQuestion[],
   answer: string
 ): Promise<BuildValidationResult> {
-  const normalizedAnswer = answer.toLowerCase();
-  const keywordHits = questions.filter((question) =>
-    question.expectedKeywords.some((keyword) => normalizedAnswer.includes(keyword.toLowerCase()))
-  ).length;
-  const heuristicPassed = keywordHits >= Math.max(1, Math.ceil(questions.length * 0.6));
   const phaseTitle = plan.phases[phaseIndex]?.title ?? "this phase";
-  const missedQuestion = questions.find(
-    (question) => !question.expectedKeywords.some((keyword) => normalizedAnswer.includes(keyword.toLowerCase()))
-  );
-  const targetedFollowUp = missedQuestion ??
-    questions[0] ?? {
-      prompt: `Explain ${phaseTitle} again with the file boundary and verification path.`,
-      expectedKeywords: [],
-    };
-
-  const fallback = heuristicPassed
-    ? '{"passed":true}'
-    : JSON.stringify({
-        passed: false,
-        followUp: `Tighten the explanation for ${phaseTitle}. ${targetedFollowUp.prompt}`,
-      });
+  const heuristicScore = scoreAnswerHeuristically(plan, phaseIndex, questions, answer);
+  const heuristicTotal = sumScore(heuristicScore);
+  const heuristicClassification = classifyScore(heuristicTotal);
+  const fallbackResult: BuildValidationResult = {
+    passed:
+      heuristicTotal >= 10 &&
+      heuristicScore.fileOwnership >= 2 &&
+      heuristicScore.responsibilitySeparation >= 2 &&
+      heuristicScore.verificationPlan >= 1,
+    classification: heuristicClassification,
+    score: heuristicScore,
+    total: heuristicTotal,
+    followUp: `Tighten the explanation for ${phaseTitle}. Explain the goal, file ownership, responsibility split, data/control flow, and verification path.`,
+  };
 
   const raw = await safeComplete(
     llm,
@@ -580,8 +771,10 @@ export async function evaluateValidationAnswer(
         role: "system",
         content: [
           "Return only JSON.",
-          'Use the schema {"passed":boolean,"followUp":"string"}',
-          "Pass only when the answer clearly explains the implementation shape, file ownership, and validation path.",
+          'Use the schema {"score":{"goalUnderstanding":0-2,"fileOwnership":0-3,"responsibilitySeparation":0-3,"dataControlFlow":0-3,"verificationPlan":0-2},"followUp":"string"}',
+          "Score the user answer using these dimensions: goal understanding, file ownership, responsibility separation, data/control flow, and verification plan.",
+          "Socratic mode passes only at 10/13 or higher with file ownership >= 2, responsibility separation >= 2, and verification plan >= 1.",
+          "Accept imperfect wording and non-technical language when the mental model is clear. Reject blind approval, no file ownership, and no verification path.",
         ].join(" "),
       },
       {
@@ -594,23 +787,72 @@ export async function evaluateValidationAnswer(
         }),
       },
     ],
-    fallback
+    JSON.stringify(fallbackResult)
   );
 
   const json = extractJsonObject(raw);
   if (!json) {
-    return JSON.parse(fallback) as BuildValidationResult;
+    return {
+      ...fallbackResult,
+      followUp: buildSocraticFeedback(plan, phaseIndex, answer, fallbackResult),
+    };
   }
 
   try {
-    const parsed = JSON.parse(json) as { passed?: unknown; followUp?: unknown };
+    const result = normalizeEvaluationResult(JSON.parse(json), fallbackResult);
+    if (result.passed) {
+      return result;
+    }
     return {
-      passed: parsed.passed === true,
-      ...(typeof parsed.followUp === "string" ? { followUp: normalizeWhitespace(parsed.followUp) } : {}),
+      ...result,
+      followUp: buildSocraticFeedback(plan, phaseIndex, answer, result),
     };
   } catch {
-    return JSON.parse(fallback) as BuildValidationResult;
+    return {
+      ...fallbackResult,
+      followUp: buildSocraticFeedback(plan, phaseIndex, answer, fallbackResult),
+    };
   }
+}
+
+export function renderArchitectureMarkdown(
+  plan: ImplementationPlan,
+  completedPhaseCount: number,
+  mode: "guided" | "socratic"
+): string {
+  const lines = [
+    "# Architecture",
+    "",
+    `Mode: ${mode}`,
+    `Goal: ${plan.goal}`,
+    "",
+    "## Summary",
+    "",
+    plan.summary,
+    "",
+    "## Architecture Notes",
+    "",
+    ...plan.architecture.map((item) => `- ${item}`),
+    "",
+    "## Phases",
+    "",
+    ...plan.phases.flatMap((phase, index) => [
+      `### ${index + 1}. ${phase.title}`,
+      "",
+      `Status: ${index < completedPhaseCount ? "completed" : index === completedPhaseCount ? "active" : "pending"}`,
+      "",
+      phase.summary,
+      "",
+      "Files and responsibilities:",
+      ...phase.files.map((file) => `- ${file.action.toUpperCase()} ${file.path}: ${file.why}`),
+      "",
+      "Verification:",
+      ...(phase.verification.length > 0 ? phase.verification.map((item) => `- ${item}`) : ["- Not specified yet."]),
+      "",
+    ]),
+  ];
+
+  return `${lines.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd()}\n`;
 }
 
 export function buildExecutionPrompt(request: string, plan: ImplementationPlan, mode: "guided" | "socratic"): string {

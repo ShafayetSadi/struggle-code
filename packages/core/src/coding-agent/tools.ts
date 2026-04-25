@@ -153,10 +153,12 @@ async function runShellCommand(
   signal?: AbortSignal
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   assertSafeCommand(command);
-  const shell = process.env.SHELL ?? "/bin/sh";
+  const isWindows = process.platform === "win32";
+  const shell = isWindows ? (process.env.ComSpec ?? "cmd.exe") : (process.env.SHELL ?? "/bin/sh");
+  const shellArgs = isWindows ? ["/d", "/s", "/c", command] : ["-lc", command];
 
   return await new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn(shell, ["-lc", command], {
+    const child = spawn(shell, shellArgs, {
       cwd: projectPath,
       env: process.env,
       stdio: ["ignore", "pipe", "pipe"],

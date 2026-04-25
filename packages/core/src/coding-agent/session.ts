@@ -26,6 +26,9 @@ import {
   formatPhaseValidationPrompt,
   formatPlanForUser,
   looksLikeApproval,
+  looksLikeBypassRequest,
+  looksLikeGuidedContinuation,
+  renderArchitectureMarkdown,
 } from "./mode-runtime.js";
 import { buildSystemPrompt } from "./prompt.js";
 import { createProjectTools, resolveProjectPath } from "./tools.js";
@@ -286,6 +289,24 @@ export async function createCodingAgentSession(
     };
   };
 
+  const writeArchitectureDoc = async (completedPhaseCount: number) => {
+    if (!pendingPlan || (pendingPlan.mode !== "guided" && pendingPlan.mode !== "socratic")) {
+      return;
+    }
+
+    const architecturePath = resolveProjectPath(projectPath, "ARCHITECTURE.md");
+    await io.writeFile(
+      architecturePath,
+      renderArchitectureMarkdown(pendingPlan.plan, completedPhaseCount, pendingPlan.mode)
+    );
+    pushTrail("adr_generated", {
+      path: "ARCHITECTURE.md",
+      mode: pendingPlan.mode,
+      completedPhaseCount,
+      goal: pendingPlan.plan.goal,
+    });
+  };
+
   const setReadyStateForMode = () => {
     setModePhase("idle");
     updateActiveStep(
@@ -425,7 +446,7 @@ export async function createCodingAgentSession(
             return;
           }
 
-          if (!looksLikeApproval(message)) {
+          if (!looksLikeGuidedContinuation(message)) {
             setModePhase("awaiting-approval");
             updateActiveStep(`Waiting for approval to execute phase ${pendingPlan.currentPhaseIndex + 1}`);
             pushTextChunk(push, formatPhaseForUser(pendingPlan.plan, pendingPlan.currentPhaseIndex, "guided"));
@@ -433,6 +454,7 @@ export async function createCodingAgentSession(
             return;
           }
 
+          await writeArchitectureDoc(pendingPlan.currentPhaseIndex);
           pushTextChunk(
             push,
             `Executing phase ${pendingPlan.currentPhaseIndex + 1} of ${pendingPlan.plan.phases.length}: ${currentPhase.title}.\n`
@@ -456,6 +478,7 @@ export async function createCodingAgentSession(
           }
 
           pendingPlan.currentPhaseIndex += 1;
+          await writeArchitectureDoc(pendingPlan.currentPhaseIndex);
           if (pendingPlan.currentPhaseIndex >= pendingPlan.plan.phases.length) {
             pushTrail("milestone_complete", { mode: "guided", goal: pendingPlan.plan.goal });
             pushTextChunk(push, "Guided mode finished every planned phase for this request.\n");
@@ -493,6 +516,7 @@ export async function createCodingAgentSession(
               return;
             }
 
+            await writeArchitectureDoc(pendingPlan.currentPhaseIndex);
             pushTextChunk(
               push,
               `Executing phase ${pendingPlan.currentPhaseIndex + 1} of ${pendingPlan.plan.phases.length}: ${currentPhase.title}.\n`
@@ -530,6 +554,7 @@ export async function createCodingAgentSession(
             }
 
             pendingPlan.currentPhaseIndex += 1;
+            await writeArchitectureDoc(pendingPlan.currentPhaseIndex);
             pendingPlan.attempts = 0;
             pendingPlan.validationPassed = false;
 
@@ -560,6 +585,25 @@ export async function createCodingAgentSession(
             return;
           }
 
+          if (looksLikeBypassRequest(message)) {
+            setModePhase("awaiting-validation");
+            updateActiveStep(`Waiting for the user to explain phase ${pendingPlan.currentPhaseIndex + 1}`);
+            pushTextChunk(
+              push,
+              [
+                "I can't skip the understanding check in Socratic mode.",
+                "",
+                "For this phase, you need to confirm:",
+                "1. Which file owns the main logic?",
+                "2. Which file handles input/output or orchestration?",
+                "3. How should we verify it?",
+                "",
+                "Reply with your explanation once you understand the phase.",
+              ].join("\n") + "\n"
+            );
+            return;
+          }
+
           setModePhase("verifying");
           updateActiveStep("Checking whether the user understands the implementation plan");
           pendingPlan.attempts += 1;
@@ -576,7 +620,7 @@ export async function createCodingAgentSession(
             message
           );
 
-          if (!result.passed) {
+          if (!result.passed && result.classification !== "partial") {
             setModePhase("awaiting-validation");
             const followUp =
               result.followUp ??
@@ -589,7 +633,11 @@ export async function createCodingAgentSession(
           pendingPlan.validationPassed = true;
           setModePhase("awaiting-approval");
           updateActiveStep(`Waiting for approval to execute phase ${pendingPlan.currentPhaseIndex + 1}`);
-          pushTextChunk(push, "Validation passed for this phase.\n");
+          if (result.passed) {
+            pushTextChunk(push, "Validation passed for this phase.\n");
+          } else {
+            pushTextChunk(push, result.followUp ?? "Your answer is partially correct. Review the stronger answer, then approve or retry.\n");
+          }
           pushTextChunk(
             push,
             `${formatExecutionApprovalPrompt(pendingPlan.plan, pendingPlan.currentPhaseIndex, "socratic")}\n`
