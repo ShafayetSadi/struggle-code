@@ -64,7 +64,7 @@ describe("project tools", () => {
     const searchedText = searched.content[0] && "text" in searched.content[0] ? searched.content[0].text : "";
     expect(searchedText).toContain("alpha.ts:1");
 
-    const command = await runTool.execute("3", { command: "printf 'tool-ok'" });
+    const command = await runTool.execute("3", { command: "node -e \"process.stdout.write('tool-ok')\"" });
     const commandText = command.content[0] && "text" in command.content[0] ? command.content[0].text : "";
     expect(commandText).toContain("EXIT CODE: 0");
     expect(commandText).toContain("tool-ok");

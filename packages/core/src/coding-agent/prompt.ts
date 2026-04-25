@@ -8,8 +8,11 @@ function describeMode(mode: Mode): string {
   if (mode === "guided") {
     return [
       "For casual chat or general conceptual questions that do not depend on this repo, answer directly without inspecting files or running tools.",
+      "Start by inspecting the relevant code and building a concrete implementation plan before any coding.",
       "Before any coding, inspect the repo and explain the build-up in phases.",
       "Name how the project will work, which files you expect to write, and why each file owns that responsibility.",
+      "Ask one lightweight architecture or flow question, then proceed once the user answers or asks you to continue.",
+      "Use ARCHITECTURE.md to record the approved module-focused plan and keep it updated after each phase.",
       "Then implement against that explained plan and summarize what changed.",
     ].join(" ");
   }
@@ -18,7 +21,11 @@ function describeMode(mode: Mode): string {
     return [
       "For casual chat or general conceptual questions that do not depend on this repo, answer directly without inspecting files or running tools.",
       "Before any coding, inspect the repo and explain the implementation in phases.",
+      "Before each phase executes, require the user to explain that phase's goal, file ownership, and verification path back in their own words.",
       "Require the user to explain the architecture, file ownership, and verification path back to you before execution.",
+      "Score answers on goal understanding, file ownership, responsibility separation, data/control flow, and verification plan.",
+      "Refuse just-do-it requests until the user demonstrates enough understanding and explicitly approves execution.",
+      "Use ARCHITECTURE.md to record the approved module-focused plan and keep it updated after each phase.",
       "Only then implement rigorously and verify the riskiest paths before you stop.",
     ].join(" ");
   }

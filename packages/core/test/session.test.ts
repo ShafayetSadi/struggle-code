@@ -583,9 +583,11 @@ describe("coding agent session", () => {
     expect(thirdTurn[0]).toEqual(
       expect.objectContaining({
         kind: "text",
-        value: "Validation passed for this phase.\n",
+        value: expect.stringContaining("Your answer is partially correct."),
       })
     );
+    expect(thirdTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("Score: 8/13"))).toBe(true);
+    expect(thirdTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("Stronger answer:"))).toBe(true);
     expect(thirdTurn.some((chunk) => chunk.kind === "text" && chunk.value.includes("should I execute phase 1"))).toBe(
       true
     );
@@ -610,6 +612,8 @@ describe("coding agent session", () => {
       true
     );
     expect(session.state.modePhase).toBe("awaiting-validation");
+    const architecture = Array.from(io.writes.entries()).find(([path]) => path.endsWith("ARCHITECTURE.md"))?.[1];
+    expect(architecture).toContain("Status: completed");
   });
 
   it("routes debug requests through the socratic loop instead of executing immediately", async () => {
