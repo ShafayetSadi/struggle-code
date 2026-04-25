@@ -108,6 +108,7 @@ export interface RunReplOptions {
   config?: ProviderConfig;
   input?: NodeJS.ReadableStream;
   output?: NodeJS.WritableStream;
+  resume?: boolean;
 }
 
 async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> {
