@@ -91,13 +91,7 @@ export function setAvailableProviders(providers: Provider[]): void {
 }
 
 function getAllItems(): SelectItem[] {
-  return [
-    ...TOP_LEVEL_ITEMS,
-    ...HELP_ITEMS,
-    ...LOGIN_ITEMS,
-    ...providerItems,
-    ...MODE_ITEMS,
-  ];
+  return [...TOP_LEVEL_ITEMS, ...HELP_ITEMS, ...LOGIN_ITEMS, ...providerItems];
 }
 
 type MenuContext = "root" | "help" | "login" | "providers" | "mode" | "search";
@@ -123,7 +117,7 @@ function itemsForContext(context: MenuContext, query: string): SelectItem[] {
     case "providers":
       return providerItems;
     case "mode":
-      return MODE_ITEMS;
+      return [];
     case "search": {
       const n = query.trimStart().toLowerCase();
       const term = n.startsWith("/") ? n.slice(1) : n;
