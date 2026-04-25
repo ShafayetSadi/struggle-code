@@ -17,6 +17,7 @@ Commands:
   /copy                     Copy the latest generated output
   /clear                    Clear the transcript
   /new                      Start a fresh session
+  /resume                   Resume the last saved session
   /share <path>             Share a file with the active session
   /trail export [path] [--format md|pdf]
                             Export the learning trail
@@ -87,6 +88,8 @@ export function parseSlashCommand(input: string): SlashCommand | undefined {
       return { kind: "copy" };
     case "new":
       return { kind: "new" };
+    case "resume":
+      return { kind: "resume" };
     case "exit":
     case "quit":
       return { kind: "exit" };
@@ -182,6 +185,7 @@ export async function handleSlashCommand(
     case "copy":
     case "clear":
     case "new":
+    case "resume":
       return "continue";
     case "exit":
       return "exit";

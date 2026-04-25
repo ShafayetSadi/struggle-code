@@ -14,6 +14,7 @@ export type SlashCommand =
   | { kind: "copy" }
   | { kind: "clear" }
   | { kind: "new" }
+  | { kind: "resume" }
   | { kind: "exit" }
   | { kind: "login"; provider?: string }
   | { kind: "providers"; provider?: string }

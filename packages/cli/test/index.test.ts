@@ -31,6 +31,7 @@ describe("cli entry", () => {
       path: "notes/trail.md",
       format: "pdf",
     });
+    expect(parseSlashCommand("/resume")).toEqual({ kind: "resume" });
   });
 
   it("formats the prompt with the active mode", () => {
