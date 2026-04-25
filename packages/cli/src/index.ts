@@ -7,8 +7,9 @@ import { DEFAULT_CONFIGS, type Provider, type ProviderConfig } from "@struggle-a
 import { Command, InvalidArgumentError } from "commander";
 
 import { CONFIG_PATH, clearSavedAuth, getCurrentConfig, writeConfigFile } from "./configStore.js";
+import { runDaemon } from "./daemon.js";
 import { cliIO } from "./ioImpl.js";
-import { runOAuthLogin } from "./oauthLogin.js";
+import { runProviderLogin } from "./oauthLogin.js";
 import { formatPrompt, HELP_TEXT, parseSlashCommand, runRepl } from "./repl.js";
 
 function isSupportedProvider(value: string): value is Provider {
@@ -119,10 +120,10 @@ export function createProgram(): Command {
 
   config
     .command("login")
-    .argument("<provider>", "OAuth provider to authenticate")
+    .argument("<provider>", "Provider to authenticate")
     .action(async (providerInput: string) => {
       const provider = parseProviderOrThrow(providerInput);
-      await runOAuthLogin(provider);
+      await runProviderLogin(provider);
     });
 
   config
@@ -139,6 +140,13 @@ export function createProgram(): Command {
     const configValue = await getCurrentConfig();
     process.stdout.write(`${JSON.stringify(configValue, null, 2)}\n`);
   });
+
+  program
+    .command("daemon")
+    .description("Start in IPC daemon mode (used by the VS Code extension)")
+    .action(async () => {
+      await runDaemon();
+    });
 
   program
     .command("repl")

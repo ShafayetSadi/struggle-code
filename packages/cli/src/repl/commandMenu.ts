@@ -1,3 +1,4 @@
+import type { Provider } from "@struggle-ai/core";
 import type { Component, SelectItem } from "../pi-tui/src/index.js";
 import { Key, padToWidth, truncateToWidth } from "../pi-tui/src/index.js";
 
@@ -5,7 +6,8 @@ import { chalk, P } from "./palette.js";
 
 const TOP_LEVEL_ITEMS: SelectItem[] = [
   { value: "/help ", label: "/help", description: "Hints & stuck commands" },
-  { value: "/login", label: "/login", description: "Authenticate the active OAuth provider" },
+  { value: "/login", label: "/login", description: "Show available OAuth login providers" },
+  { value: "/providers", label: "/providers", description: "Show providers or switch the active provider" },
   { value: "/logout", label: "/logout", description: "Clear saved credentials for the active provider" },
   { value: "/mode ", label: "/mode", description: "Switch learning mode" },
   { value: "/model", label: "/model", description: "Show active model or switch model" },
@@ -29,21 +31,81 @@ const MODE_ITEMS: SelectItem[] = [
   { value: "/mode socratic", label: "/mode socratic", description: "Socratic - questions only" },
 ];
 
-const ALL_ITEMS: SelectItem[] = [
-  ...TOP_LEVEL_ITEMS,
-  ...HELP_ITEMS,
-  ...MODE_ITEMS,
-  { value: "/exit", label: "/exit", description: "Close the session" },
+const LOGIN_ITEMS: SelectItem[] = [
+  {
+    value: "/login anthropic",
+    label: "/login anthropic",
+    description: "Save an Anthropic API key",
+  },
+  {
+    value: "/login google",
+    label: "/login google",
+    description: "Save a Google Gemini API key",
+  },
+  {
+    value: "/login openai",
+    label: "/login openai",
+    description: "Save an OpenAI API key",
+  },
+  {
+    value: "/login openrouter",
+    label: "/login openrouter",
+    description: "Save an OpenRouter API key",
+  },
+  {
+    value: "/login google-antigravity",
+    label: "/login google-antigravity",
+    description: "Authenticate with Google Antigravity",
+  },
+  {
+    value: "/login openai-codex",
+    label: "/login openai-codex",
+    description: "Authenticate with OpenAI Codex",
+  },
 ];
 
-export const COMMAND_ITEMS: SelectItem[] = ALL_ITEMS;
+const PROVIDER_LABELS: Record<Provider, string> = {
+  anthropic: "Anthropic",
+  google: "Google Gemini",
+  openai: "OpenAI",
+  openrouter: "OpenRouter",
+  "google-antigravity": "Google Antigravity",
+  "openai-codex": "OpenAI Codex",
+};
 
-type MenuContext = "root" | "help" | "mode" | "search";
+let providerItems: SelectItem[] = [];
+
+function buildProviderItems(providers: Provider[]): SelectItem[] {
+  return providers.map((provider) => ({
+    value: `/providers ${provider}`,
+    label: `/providers ${provider}`,
+    description: `Switch to ${PROVIDER_LABELS[provider]}`,
+  }));
+}
+
+export function setAvailableProviders(providers: Provider[]): void {
+  providerItems = buildProviderItems(providers);
+}
+
+function getAllItems(): SelectItem[] {
+  return [
+    ...TOP_LEVEL_ITEMS,
+    ...HELP_ITEMS,
+    ...LOGIN_ITEMS,
+    ...providerItems,
+    ...MODE_ITEMS,
+    { value: "/exit", label: "/exit", description: "Close the session" },
+  ];
+}
+
+type MenuContext = "root" | "help" | "login" | "providers" | "mode" | "search";
 
 function contextForQuery(query: string): MenuContext {
   const n = query.trimStart().toLowerCase();
   if (n === "/" || n === "") return "root";
   if (n === "/help" || n === "/help ") return "help";
+  if (n === "/login" || n === "/login ") return "login";
+  if (n === "/providers" || n === "/providers " || n === "/provider" || n === "/provider ") return "providers";
   if (n === "/mode" || n === "/mode ") return "mode";
   return "search";
 }
@@ -54,11 +116,15 @@ function itemsForContext(context: MenuContext, query: string): SelectItem[] {
       return TOP_LEVEL_ITEMS;
     case "help":
       return HELP_ITEMS;
+    case "login":
+      return LOGIN_ITEMS;
+    case "providers":
+      return providerItems;
     case "mode":
       return MODE_ITEMS;
     case "search": {
       const n = query.trimStart().toLowerCase();
-      return ALL_ITEMS.filter((item) => {
+      return getAllItems().filter((item) => {
         const v = item.value.toLowerCase();
         const l = item.label.toLowerCase();
         const d = (item.description ?? "").toLowerCase();
@@ -74,6 +140,10 @@ function headerForContext(context: MenuContext): string {
       return "  Commands";
     case "help":
       return "  /help - hints & stuck";
+    case "login":
+      return "  /login - OAuth providers";
+    case "providers":
+      return "  /providers - available providers";
     case "mode":
       return "  /mode - learning modes";
     case "search":

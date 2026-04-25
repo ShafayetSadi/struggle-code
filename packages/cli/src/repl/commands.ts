@@ -9,7 +9,8 @@ import type { ReplState, SlashCommand } from "./types.js";
 export const ROOT_MENU_TEXT = `
 Commands:
   /help                     Hints & stuck commands
-  /login [provider]         Authenticate the active or selected OAuth provider
+  /login [provider]         Show providers or authenticate one directly
+  /providers [provider]     Show providers or switch the active provider
   /logout                   Clear saved credentials for the active provider
   /mode                     Show available learning modes
   /model [model-id]         Show active model or switch models
@@ -20,6 +21,34 @@ Commands:
   /trail export [path] [--format md|pdf]
                             Export the learning trail
 `.trim();
+
+export const LOGIN_MENU_TEXT = `
+Available login providers:
+  /login anthropic          Save an Anthropic API key
+  /login google             Save a Google Gemini API key
+  /login openai             Save an OpenAI API key
+  /login openrouter         Save an OpenRouter API key
+  /login google-antigravity Authenticate with Google Antigravity
+  /login openai-codex       Authenticate with OpenAI Codex
+`.trim();
+
+export const PROVIDERS_MENU_TEXT = `
+Available providers:
+  /providers anthropic          Switch to Anthropic
+  /providers google             Switch to Google Gemini
+  /providers openai             Switch to OpenAI
+  /providers openrouter         Switch to OpenRouter
+  /providers google-antigravity Switch to Google Antigravity
+  /providers openai-codex       Switch to OpenAI Codex
+`.trim();
+
+export function formatProvidersMenu(providers: string[]): string[] {
+  if (providers.length === 0) {
+    return ["No logged-in providers yet.", "Run /login to authenticate a provider first."];
+  }
+
+  return ["Available providers:", ...providers.map((provider) => `  /providers ${provider}`)];
+}
 
 export const HELP_TEXT = `
 Help commands:
@@ -63,6 +92,9 @@ export function parseSlashCommand(input: string): SlashCommand | undefined {
       return { kind: "exit" };
     case "login":
       return args.length > 0 ? { kind: "login", provider: args.join(" ") } : { kind: "login" };
+    case "providers":
+    case "provider":
+      return args.length > 0 ? { kind: "providers", provider: args.join(" ") } : { kind: "providers-menu" };
     case "logout":
       return { kind: "logout" };
     case "model":
@@ -124,6 +156,7 @@ export async function handleSlashCommand(
   replState: ReplState,
   handleModelCommand: (model?: string) => Promise<string[]>,
   handleLoginCommand: (provider?: string) => Promise<string[]>,
+  handleProviderCommand: (provider?: string) => Promise<string[]>,
   handleLogoutCommand: () => Promise<string[]>,
   writeLine: (value: string) => void,
   writeLines: (values: string[]) => void
@@ -138,6 +171,9 @@ export async function handleSlashCommand(
     case "mode-menu":
       writeLines(MODE_MENU_TEXT.split("\n"));
       return "continue";
+    case "providers-menu":
+      writeLines(await handleProviderCommand());
+      return "continue";
     case "model": {
       const modelCmd = command as { kind: "model"; model?: string };
       writeLines(await handleModelCommand(modelCmd.model));
@@ -150,7 +186,10 @@ export async function handleSlashCommand(
     case "exit":
       return "exit";
     case "login":
-      writeLines(await handleLoginCommand(command.provider));
+      writeLines(command.provider ? await handleLoginCommand(command.provider) : LOGIN_MENU_TEXT.split("\n"));
+      return "continue";
+    case "providers":
+      writeLines(await handleProviderCommand(command.provider));
       return "continue";
     case "logout":
       writeLines(await handleLogoutCommand());

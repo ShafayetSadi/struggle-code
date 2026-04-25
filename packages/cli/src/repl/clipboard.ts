@@ -4,16 +4,34 @@ import * as process from "node:process";
 function runClipboardCommand(command: string, args: string[], text: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { stdio: ["pipe", "ignore", "ignore"] });
+    let settled = false;
 
-    child.on("error", reject);
-    child.on("close", (code) => {
-      if (code === 0) {
-        resolve();
+    const fail = (error: Error) => {
+      if (settled) {
         return;
       }
-      reject(new Error(`Clipboard command failed: ${command}`));
+      settled = true;
+      reject(error);
+    };
+
+    const succeed = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve();
+    };
+
+    child.on("error", (error) => fail(error));
+    child.on("close", (code) => {
+      if (code === 0) {
+        succeed();
+        return;
+      }
+      fail(new Error(`Clipboard command failed: ${command}`));
     });
 
+    child.stdin.on("error", (error) => fail(error));
     child.stdin.end(text);
   });
 }

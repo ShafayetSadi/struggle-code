@@ -69,7 +69,7 @@ export const Key = {
 // ─── ANSI Utilities ───────────────────────────────────────────────────────────
 
 // Matches all ANSI escape sequences (colors, movement, etc.)
-const ANSI_ESCAPE_RE = new RegExp("\\u001b\\[[0-9;]*[A-Za-z]", "g");
+const ANSI_ESCAPE_RE = new RegExp("\\u001b\\[[0-9;]*[A-Za-z]|\\u001b\\]8;;.*?(\\u0007|\\u001b\\\\)", "g");
 const BRACKETED_PASTE_RE = new RegExp("^\\u001b\\[200~([\\s\\S]*)\\u001b\\[201~$");
 const SGR_WHEEL_UP_RE = new RegExp("^\\u001b\\[<64;\\d+;\\d+[mM]$");
 const SGR_WHEEL_DOWN_RE = new RegExp("^\\u001b\\[<65;\\d+;\\d+[mM]$");
@@ -177,6 +177,7 @@ export class Input implements Component {
   private value = "";
   private cursor = 0;
   private _focused = false;
+  private maskChar: string | undefined;
 
   onSubmit?: (value: string) => void;
 
@@ -194,6 +195,10 @@ export class Input implements Component {
   setValue(v: string): void {
     this.value = v;
     this.cursor = v.length;
+  }
+
+  setMaskChar(v: string | undefined): void {
+    this.maskChar = v;
   }
 
   invalidate(): void {}
@@ -276,8 +281,9 @@ export class Input implements Component {
 
   render(width: number): string[] {
     const maxVisible = Math.max(1, width - 1);
-    const before = this.value.slice(0, this.cursor);
-    const after = this.value.slice(this.cursor);
+    const displayValue = this.maskChar ? this.maskChar.repeat(this.value.length) : this.value;
+    const before = displayValue.slice(0, this.cursor);
+    const after = displayValue.slice(this.cursor);
 
     // Scroll viewport so cursor is always visible
     let start = 0;
@@ -683,6 +689,7 @@ export class TUI {
 
   start(): void {
     this.running = true;
+    this.lastRenderedLines = [];
     this.terminal.enterAlternateScreen();
     this.terminal.clearScreen();
     this.terminal.hideCursor();
@@ -711,6 +718,7 @@ export class TUI {
 
   stop(): void {
     this.running = false;
+    this.lastRenderedLines = [];
     this.terminal.showCursor();
     this.terminal.exitAlternateScreen();
 

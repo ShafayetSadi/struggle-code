@@ -3,12 +3,22 @@ import { createInterface, type Interface } from "node:readline/promises";
 import { getModels } from "@mariozechner/pi-ai";
 import { DEFAULT_CONFIGS, type IO, type Provider, type ProviderConfig, startSession } from "@struggle-ai/core";
 
-import { CONFIG_PATH, clearSavedAuth, getCurrentConfig, OAUTH_PROVIDERS, writeConfigFile } from "./configStore.js";
-import { cliIO } from "./ioImpl.js";
-import { runOAuthLogin } from "./oauthLogin.js";
-import { Key, ProcessTerminal, TUI } from "./pi-tui/src/index.js";
-import { copyToClipboard } from "./repl/clipboard.js";
 import {
+  CONFIG_PATH,
+  clearSavedAuth,
+  getConfigForProvider,
+  listAuthenticatedProviders,
+  OAUTH_PROVIDERS,
+  writeConfigFile,
+} from "./configStore.js";
+import { cliIO } from "./ioImpl.js";
+import { runProviderLogin } from "./oauthLogin.js";
+import { Key, ProcessTerminal, TUI } from "./pi-tui/src/index.js";
+import { openUrlInBrowser } from "./repl/browser.js";
+import { copyToClipboard } from "./repl/clipboard.js";
+import { setAvailableProviders } from "./repl/commandMenu.js";
+import {
+  formatProvidersMenu,
   HELP_TEXT,
   handleSlashCommand,
   parseSlashCommand,
@@ -20,6 +30,7 @@ import { chalk, formatChunk, formatPrompt, P } from "./repl/formatting.js";
 import { HelpMenu } from "./repl/helpMenu.js";
 import { createTuiIO } from "./repl/io.js";
 import { ModeMenu } from "./repl/modeMenu.js";
+import { LoginOverlay } from "./repl/loginOverlay.js";
 import { ModelMenu } from "./repl/modelMenu.js";
 import { ReplScreen } from "./repl/screen.js";
 import type { ReplState, SlashCommand } from "./repl/types.js";
@@ -106,6 +117,7 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
   const io = options.io ?? cliIO;
   let currentConfig = options.config ?? DEFAULT_CONFIGS.anthropic;
   let session = await startSession(projectPath, io, currentConfig);
+  setAvailableProviders(await listAuthenticatedProviders());
   let lastGeneratedText: string | undefined;
   const replState: ReplState = {
     hintLevel: 1,
@@ -145,21 +157,42 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
     await clearSavedAuth(provider);
     currentConfig = stripRuntimeAuth(currentConfig);
     session.setProviderConfig(currentConfig);
+    setAvailableProviders(await listAuthenticatedProviders());
     return [`logged out from ${provider}`];
   };
 
   const handleLoginCommand = async (providerInput?: string): Promise<string[]> => {
-    const provider = (providerInput ?? currentConfig.provider) as Provider;
-    if (!OAUTH_PROVIDERS.has(provider)) {
-      return [`Provider does not support OAuth login: ${provider}`];
+    if (!providerInput) {
+      return [
+        "Available login providers:",
+        "  /login anthropic",
+        "  /login google",
+        "  /login openai",
+        "  /login openrouter",
+        "  /login google-antigravity",
+        "  /login openai-codex",
+      ];
     }
 
-    await runOAuthLogin(provider);
-    if (provider === currentConfig.provider) {
-      currentConfig = await getCurrentConfig();
-      session.setProviderConfig(currentConfig);
+    const provider = providerInput as Provider;
+    await runProviderLogin(provider);
+    currentConfig = await getConfigForProvider(provider);
+    session.setProviderConfig(currentConfig);
+    await writeConfigFile(CONFIG_PATH, currentConfig);
+    setAvailableProviders(await listAuthenticatedProviders());
+    return [`logged in to ${provider}`, `active provider set to ${provider}/${currentConfig.model}`];
+  };
+
+  const handleProviderCommand = async (providerInput?: string): Promise<string[]> => {
+    if (!providerInput) {
+      return formatProvidersMenu(await listAuthenticatedProviders());
     }
-    return [`logged in to ${provider}`];
+
+    const provider = providerInput as Provider;
+    currentConfig = await getConfigForProvider(provider);
+    session.setProviderConfig(currentConfig);
+    await writeConfigFile(CONFIG_PATH, currentConfig);
+    return [`active provider set to ${provider}`, `current model ${currentConfig.provider}/${currentConfig.model}`];
   };
 
   process.stdout.write(chalk.hex(P.textPrimary).bold("Struggle AI") + chalk.hex(P.textMuted)("  interactive\n"));
@@ -210,6 +243,7 @@ async function runReadlineFallback(options: RunReplOptions = {}): Promise<void> 
             replState,
             handleModelCommand,
             handleLoginCommand,
+            handleProviderCommand,
             handleLogoutCommand,
             (line) => {
               commandOutput.push(line);
@@ -288,6 +322,7 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
 
   const io = createTuiIO(baseIO, writeLine);
   let session = await startSession(projectPath, io, currentConfig);
+  setAvailableProviders(await listAuthenticatedProviders());
   let lastGeneratedText: string | undefined;
   const replState: ReplState = {
     hintLevel: 1,
@@ -339,28 +374,63 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
     await clearSavedAuth(provider);
     currentConfig = stripRuntimeAuth(currentConfig);
     session.setProviderConfig(currentConfig);
+    setAvailableProviders(await listAuthenticatedProviders());
     return [`logged out from ${provider}`];
   };
 
   const handleLoginCommand = async (providerInput?: string): Promise<string[]> => {
-    const provider = (providerInput ?? currentConfig.provider) as Provider;
-    if (!OAUTH_PROVIDERS.has(provider)) {
-      return [`Provider does not support OAuth login: ${provider}`];
+    if (!providerInput) {
+      return [
+        "Available login providers:",
+        "  /login anthropic",
+        "  /login google",
+        "  /login openai",
+        "  /login openrouter",
+        "  /login google-antigravity",
+        "  /login openai-codex",
+      ];
     }
 
-    tui.stop();
+    const provider = providerInput as Provider;
+    const loginOverlay = new LoginOverlay(() => tui.requestRender(), {
+      copyAuthUrl: copyToClipboard,
+      openAuthUrl: openUrlInBrowser,
+    });
+    loginOverlay.writeLine(`Logging in to ${provider}...`);
+    const overlay = tui.showOverlay(loginOverlay, {
+      width: "100%",
+      minWidth: 64,
+      maxHeight: 16,
+      anchor: "bottom-center",
+    });
     try {
-      await runOAuthLogin(provider);
+      await runProviderLogin(provider, loginOverlay);
     } finally {
-      tui.start();
+      overlay.hide();
+      tui.setFocus(screen);
+      tui.requestRender();
     }
 
-    if (provider === currentConfig.provider) {
-      currentConfig = await getCurrentConfig();
-      session.setProviderConfig(currentConfig);
-    }
+    currentConfig = await getConfigForProvider(provider);
+    session.setProviderConfig(currentConfig);
+    await writeConfigFile(CONFIG_PATH, currentConfig);
+    setAvailableProviders(await listAuthenticatedProviders());
     refreshSessionState();
-    return [`logged in to ${provider}`];
+    return [`logged in to ${provider}`, `active provider set to ${provider}/${currentConfig.model}`];
+  };
+
+  const handleProviderCommand = async (providerInput?: string): Promise<string[]> => {
+    if (!providerInput) {
+      return formatProvidersMenu(await listAuthenticatedProviders());
+    }
+
+    const provider = providerInput as Provider;
+    currentConfig = await getConfigForProvider(provider);
+    session.setProviderConfig(currentConfig);
+    await writeConfigFile(CONFIG_PATH, currentConfig);
+    setAvailableProviders(await listAuthenticatedProviders());
+    refreshSessionState();
+    return [`active provider set to ${provider}`, `current model ${currentConfig.provider}/${currentConfig.model}`];
   };
 
   for (const line of pending.splice(0)) screen.append("system", line);
@@ -503,6 +573,16 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
           openHelpMenu();
           return;
         }
+        if (command.kind === "login" && !("provider" in command && command.provider)) {
+          screen.setInputValue("/login ");
+          tui.requestRender();
+          return;
+        }
+        if (command.kind === "providers-menu") {
+          screen.setInputValue("/providers ");
+          tui.requestRender();
+          return;
+        }
         if (command.kind === "mode-menu") {
           openModeMenu();
           return;
@@ -560,6 +640,7 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
           replState,
           handleModelCommand,
           handleLoginCommand,
+          handleProviderCommand,
           handleLogoutCommand,
           trackedWriteLine,
           trackedWriteLines

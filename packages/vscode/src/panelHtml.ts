@@ -1,8 +1,15 @@
+function getNonce(): string {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  return Array.from({ length: 32 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+}
+
 export function getPanelHtml(): string {
+  const nonce = getNonce();
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline';" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Struggle AI</title>
     <style>
@@ -453,7 +460,7 @@ export function getPanelHtml(): string {
       </section>
     </main>
 
-    <script>
+    <script nonce="${nonce}">
       const vscode = acquireVsCodeApi();
       const transcript = document.getElementById("transcript");
       const stream = document.getElementById("stream");

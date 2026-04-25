@@ -9,12 +9,14 @@ export type SlashCommand =
   | { kind: "root-menu" }
   | { kind: "help" }
   | { kind: "mode-menu" }
+  | { kind: "providers-menu" }
   | { kind: "model" }
   | { kind: "copy" }
   | { kind: "clear" }
   | { kind: "new" }
   | { kind: "exit" }
   | { kind: "login"; provider?: string }
+  | { kind: "providers"; provider?: string }
   | { kind: "logout" }
   | { kind: "mode"; mode: Mode }
   | { kind: "model"; model?: string }
