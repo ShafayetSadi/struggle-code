@@ -1,7 +1,9 @@
 import { Agent, type AgentEvent, type AgentMessage } from "@mariozechner/pi-agent-core";
 import { getModel, type KnownProvider, type ToolResultMessage } from "@mariozechner/pi-ai";
 
+import { generateSessionNotesMarkdown } from "../artifacts/session-notes.js";
 import { renderTrailMarkdown } from "../artifacts/trail.js";
+import { generateTrailADR, renderADRMarkdown } from "../artifacts/trail-adr.js";
 import { classifyIntentWithDeps } from "../gate/classifier.js";
 import type { Session } from "../index.js";
 import { createLLMAdapter } from "../llm/adapter.js";
@@ -432,6 +434,9 @@ export async function createCodingAgentSession(
     getMessages(): AgentMessage[] {
       return [...agent.state.messages];
     },
+    abort() {
+      agent.abort();
+    },
     sendMessage(message: string) {
       touchState(state);
       pushTrail("user_turn", { message });
@@ -779,10 +784,20 @@ export async function createCodingAgentSession(
     async exportTrail(outputPath: string, format: "md" | "pdf") {
       const markdown = renderTrailMarkdown(state, trail, adrs, modeHistory);
       await io.writeFile(outputPath, markdown);
-      pushTrail("session_end", { exportedTo: outputPath, requestedFormat: format });
+      pushTrail("artifact_export", { kind: "trail", exportedTo: outputPath, requestedFormat: format });
       if (format === "pdf") {
         io.notify("warn", "PDF export is not available in core yet; wrote Markdown instead.");
       }
+    },
+    async exportTrailNotes(outputPath: string) {
+      const markdown = await generateSessionNotesMarkdown({ state, trail, adrs, modeHistory }, llm, io);
+      await io.writeFile(outputPath, markdown);
+      pushTrail("artifact_export", { kind: "notes", exportedTo: outputPath, requestedFormat: "md" });
+    },
+    async exportTrailADR(outputPath: string) {
+      const adr = await generateTrailADR({ state, trail, adrs, modeHistory }, llm, io);
+      await io.writeFile(outputPath, renderADRMarkdown(adr));
+      pushTrail("artifact_export", { kind: "adr", exportedTo: outputPath, requestedFormat: "md", title: adr.title });
     },
     getTrail() {
       return [...trail];

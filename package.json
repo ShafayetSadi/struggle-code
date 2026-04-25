@@ -16,6 +16,7 @@
     "lint": "biome lint .",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "tsc --build",
+    "dev:core": "npm run dev --workspace @struggle-ai/core",
     "dev:cli": "npm run dev --workspace @struggle-ai/cli",
     "dev:landing": "npm run dev --workspace landing",
     "dev:vscode": "npm run dev --workspace struggle-ai-vscode",

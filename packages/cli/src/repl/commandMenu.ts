@@ -16,7 +16,7 @@ const TOP_LEVEL_ITEMS: SelectItem[] = [
   { value: "/new", label: "/new", description: "Start a fresh session" },
   { value: "/resume ", label: "/resume", description: "List saved sessions or resume one by id" },
   { value: "/stuck", label: "/stuck", description: "Start the stuck diagnostic flow" },
-  { value: "/trail export", label: "/trail export", description: "Export the session trail" },
+  { value: "/trail", label: "/trail", description: "Show trail artifact commands" },
   { value: "/exit", label: "/exit", description: "Close the session" },
   { value: "/quit", label: "/quit", description: "Close the session" },
 ];

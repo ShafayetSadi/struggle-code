@@ -44,6 +44,7 @@ import { LoginOverlay } from "./repl/loginOverlay.js";
 import { ModelMenu } from "./repl/modelMenu.js";
 import { ProviderMenu } from "./repl/providerMenu.js";
 import { ResumeMenu } from "./repl/resumeMenu.js";
+import { TrailMenu } from "./repl/trailMenu.js";
 import { ReplScreen } from "./repl/screen.js";
 import type { ReplState, SlashCommand } from "./repl/types.js";
 
@@ -96,7 +97,11 @@ function stripRuntimeAuth(config: ProviderConfig): ProviderConfig {
 
 function shouldCaptureCommandOutput(command: SlashCommand): boolean {
   return (
-    command.kind !== "root-menu" && command.kind !== "help" && command.kind !== "mode-menu" && command.kind !== "copy"
+    command.kind !== "root-menu" &&
+    command.kind !== "help" &&
+    command.kind !== "mode-menu" &&
+    command.kind !== "trail-menu" &&
+    command.kind !== "copy"
   );
 }
 
@@ -122,6 +127,10 @@ function formatProviderModelLabel(config: ProviderConfig): string {
 
 function isModelUnavailableMessage(message: string): boolean {
   return /no longer available|model .* not available|please switch/i.test(message.toLowerCase());
+}
+
+function isAbortMessage(message: string): boolean {
+  return /abort|aborted|cancelled|canceled|interrupted/i.test(message.toLowerCase());
 }
 
 const ANSI_CSI_PATTERN = /\u001B\[[0-?]*[ -/]*[@-~]/g;
@@ -246,6 +255,14 @@ function formatProviderMenuItems(providers: Provider[], currentProvider: Provide
     label: provider,
     ...(provider === currentProvider ? { description: "current" } : {}),
   }));
+}
+
+function formatTrailMenuItems(): Array<{ value: string; label: string; description: string }> {
+  return [
+    { value: "/trail export", label: "/trail export", description: "Export the raw session trail" },
+    { value: "/trail notes", label: "/trail notes", description: "Generate AI notes from the trail" },
+    { value: "/trail adr", label: "/trail adr", description: "Generate an ADR draft from the trail" },
+  ];
 }
 
 async function resolveResumeTarget(projectPath: string, historyId?: string): Promise<HistoryNotice> {
@@ -734,6 +751,8 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
   let providerMenuOpen = false;
   let modeMenuOpen = false;
   let modelMenuOpen = false;
+  let trailMenuOpen = false;
+  let interruptActiveResponse: (() => void) | undefined;
 
   const openLoginMenu = () => {
     if (loginMenuOpen) return;
@@ -865,6 +884,35 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
     );
   };
 
+  const openTrailMenu = () => {
+    if (trailMenuOpen) return;
+    trailMenuOpen = true;
+
+    const overlay = tui.showOverlay(
+      new TrailMenu(
+        formatTrailMenuItems(),
+        (item) => {
+          overlay.hide();
+          trailMenuOpen = false;
+          tui.setFocus(screen);
+          void submitValue(item.value);
+        },
+        () => {
+          overlay.hide();
+          trailMenuOpen = false;
+          tui.setFocus(screen);
+          tui.requestRender();
+        }
+      ),
+      {
+        width: "100%",
+        minWidth: 64,
+        maxHeight: 14,
+        anchor: "bottom-center",
+      }
+    );
+  };
+
   let resumeMenuOpen = false;
   const openResumeMenu = async () => {
     if (resumeMenuOpen) return;
@@ -948,6 +996,10 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
         }
         if (command.kind === "model" && (!("model" in command) || !command.model)) {
           openModelMenu();
+          return;
+        }
+        if (command.kind === "trail-menu") {
+          openTrailMenu();
           return;
         }
 
@@ -1063,26 +1115,72 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
       tui.requestRender();
 
       let firstChunk = true;
+      let interrupted = false;
+      let resolveInterrupted: (() => void) | undefined;
+      const interruptedPromise = new Promise<void>((resolve) => {
+        resolveInterrupted = resolve;
+      });
       const responseLines: string[] = [];
       let responseCopyText = "";
-      await streamChunks(session.sendMessage(trimmed), (chunk) => {
-        if (firstChunk) {
-          firstChunk = false;
-          screen.stopThinking();
-          screen.startStreaming(() => tui.requestRender());
-        }
 
-        const chunkLines = formatChunk(chunk);
-        responseLines.push(...chunkLines);
-        responseCopyText += chunkToCopyText(chunk);
-        screen.appendStreamChunk(chunkLines.join("\n"));
+      interruptActiveResponse = () => {
+        if (interrupted) return;
+        interrupted = true;
+        session.abort();
+        screen.stopThinking();
+        screen.stopStreaming();
+        screen.setBusy(false);
         tui.requestRender();
-      });
+        resolveInterrupted?.();
+      };
+
+      const streamPromise = (async () => {
+        try {
+          await streamChunks(session.sendMessage(trimmed), (chunk) => {
+            if (interrupted) {
+              return;
+            }
+
+            if (firstChunk) {
+              firstChunk = false;
+              screen.stopThinking();
+              screen.startStreaming(() => tui.requestRender());
+            }
+
+            const chunkLines = formatChunk(chunk);
+            responseLines.push(...chunkLines);
+            responseCopyText += chunkToCopyText(chunk);
+            screen.appendStreamChunk(chunkLines.join("\n"));
+            tui.requestRender();
+          });
+        } catch (error) {
+          const message = getErrorMessage(error);
+          if (!(interrupted || isAbortMessage(message))) {
+            throw error;
+          }
+        }
+      })();
+
+      try {
+        const result = await Promise.race([
+          streamPromise.then(() => "completed" as const),
+          interruptedPromise.then(() => "interrupted" as const),
+        ]);
+
+        if (result === "interrupted") {
+          void streamPromise.catch(() => undefined);
+          screen.append("system", "response interrupted");
+          return;
+        }
+      } finally {
+        interruptActiveResponse = undefined;
+      }
 
       if (firstChunk) {
         screen.stopThinking();
       }
       screen.stopStreaming();
+
       const latestAssistantText = getLatestAssistantText(session.getMessages());
       lastGeneratedText =
         latestAssistantText ??
@@ -1120,6 +1218,10 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
   const removeListener = tui.addInputListener((data) => {
     if (data === Key.ctrl("c") || data === "\u0003") {
       close();
+      return { consume: true };
+    }
+    if ((data === Key.escape || data === "\x1b") && interruptActiveResponse) {
+      interruptActiveResponse();
       return { consume: true };
     }
     return undefined;

@@ -81,6 +81,8 @@ This milestone defines the first publishing flow because the user needs one narr
 /stuck
 /share app/main.py
 /trail export
+/trail notes
+/trail adr
 /exit
 ```
 
@@ -99,6 +101,8 @@ This milestone defines the first publishing flow because the user needs one narr
 - `/stuck` returns without crashing
 - `/share app/main.py` confirms the path was shared
 - `/trail export` writes a file path under `/tmp/struggle-fastapi-demo/.struggle-ai/`
+- `/trail notes` writes a notes file under `/tmp/struggle-fastapi-demo/.struggle-ai/`
+- `/trail adr` writes an ADR file under `/tmp/struggle-fastapi-demo/.struggle-ai/`
 
 ## Test Flow B: Guided Meta-Question Guard
 
