@@ -17,7 +17,9 @@ type WebviewMessage =
   | { type: "pickFileToShare" }
   | { type: "exportTrail" }
   | { type: "setMode"; mode: Mode }
-  | { type: "pickModel" };
+  | { type: "pickModel" }
+  | { type: "login" }
+  | { type: "logout" };
 
 // ── Trail sidebar ─────────────────────────────────────────────────────────────
 
@@ -111,6 +113,7 @@ export function activate(context: vscode.ExtensionContext): void {
   let cli: CliProcess | undefined;
   let currentMode: Mode = "guided";
   let providerLabel = "claude sonnet";
+  let isAuthenticated = false;
   const transcript: TranscriptEntry[] = [];
 
   const trailProvider = new TrailProvider();
@@ -118,7 +121,7 @@ export function activate(context: vscode.ExtensionContext): void {
   function hydrate(panel: vscode.WebviewPanel): void {
     void panel.webview.postMessage({
       type: "hydrate",
-      payload: { transcript, mode: currentMode, providerLabel, busy: false },
+      payload: { transcript, mode: currentMode, providerLabel, isAuthenticated, busy: false },
     });
   }
 
@@ -303,6 +306,22 @@ export function activate(context: vscode.ExtensionContext): void {
             } catch (err) {
               log(`pickModel — setModel failed: ${err instanceof Error ? err.message : String(err)}`);
             }
+            break;
+          }
+
+          case "login": {
+            isAuthenticated = true;
+            log(`login requested`);
+            hydrate(activePanel);
+            void vscode.window.showInformationMessage("Struggle AI: Logged in.");
+            break;
+          }
+
+          case "logout": {
+            isAuthenticated = false;
+            log(`logout requested`);
+            hydrate(activePanel);
+            void vscode.window.showInformationMessage("Struggle AI: Logged out.");
             break;
           }
         }
