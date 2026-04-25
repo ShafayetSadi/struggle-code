@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=Space+Grotesk:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-primary-fixed-variant": "#005321",
+                    "surface-bright": "#333b33",
+                    "inverse-surface": "#dce5d9",
+                    "on-error": "#690005",
+                    "on-background": "#dce5d9",
+                    "inverse-primary": "#006e2f",
+                    "on-surface-variant": "#bccbb9",
+                    "on-secondary-container": "#89c78f",
+                    "primary-fixed-dim": "#4ae176",
+                    "surface-tint": "#4ae176",
+                    "primary-fixed": "#6bff8f",
+                    "on-tertiary": "#60130d",
+                    "primary-container": "#22c55e",
+                    "tertiary-container": "#ff8b7c",
+                    "inverse-on-surface": "#2a322a",
+                    "on-secondary-fixed": "#002109",
+                    "tertiary-fixed": "#ffdad5",
+                    "primary": "#4be277",
+                    "on-primary": "#003915",
+                    "surface-dim": "#0e150e",
+                    "outline-variant": "#3d4a3d",
+                    "on-secondary-fixed-variant": "#145126",
+                    "surface": "#0e150e",
+                    "surface-container-high": "#242c24",
+                    "outline": "#869585",
+                    "surface-container-highest": "#2f372e",
+                    "on-primary-fixed": "#002109",
+                    "on-tertiary-fixed": "#410001",
+                    "on-error-container": "#ffdad6",
+                    "surface-variant": "#2f372e",
+                    "on-tertiary-container": "#76231b",
+                    "secondary-fixed": "#b2f2b7",
+                    "secondary": "#96d59d",
+                    "background": "#0e150e",
+                    "on-secondary": "#003915",
+                    "secondary-fixed-dim": "#96d59d",
+                    "error": "#ffb4ab",
+                    "on-primary-container": "#004b1e",
+                    "surface-container": "#1a221a",
+                    "surface-container-lowest": "#091009",
+                    "tertiary": "#ffb5ab",
+                    "error-container": "#93000a",
+                    "secondary-container": "#175428",
+                    "surface-container-low": "#161d16",
+                    "tertiary-fixed-dim": "#ffb4a9",
+                    "on-tertiary-fixed-variant": "#7f2a21",
+                    "on-surface": "#dce5d9"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "gutter": "24px",
+                    "xl": "48px",
+                    "sm": "8px",
+                    "lg": "24px",
+                    "md": "16px",
+                    "xs": "4px"
+            },
+            "fontFamily": {
+                    "label-caps": ["Inter"],
+                    "body-sm": ["Inter"],
+                    "h2": ["Inter"],
+                    "code-block": ["Space Grotesk"],
+                    "body-lg": ["Inter"],
+                    "h1": ["Inter"]
+            },
+            "fontSize": {
+                    "label-caps": ["12px", {"lineHeight": "1.0", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "body-sm": ["14px", {"lineHeight": "1.5", "letterSpacing": "0", "fontWeight": "400"}],
+                    "h2": ["24px", {"lineHeight": "1.3", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "code-block": ["14px", {"lineHeight": "1.7", "letterSpacing": "0", "fontWeight": "400"}],
+                    "body-lg": ["16px", {"lineHeight": "1.6", "letterSpacing": "0", "fontWeight": "400"}],
+                    "h1": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { background-color: #0A0A0B; color: #dce5d9; }
+        .terminal-shadow { box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0A0A0B; }
+        ::-webkit-scrollbar-thumb { background: #27272A; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3d4a3d; }
+    </style>
+</head>
+<body class="font-inter antialiased">
+<!-- TopNavBar -->
+<nav class="bg-[#0A0A0B] dark:bg-[#0A0A0B] docked full-width top-0 border-b border-[#27272A] flat no shadows z-50 fixed w-full">
+<div class="flex justify-between items-center h-16 w-full px-8 max-w-[1440px] mx-auto">
+<div class="text-xl font-bold font-mono text-white tracking-tighter">Socrates AI</div>
+<div class="hidden md:flex gap-8 items-center">
+<a class="text-[#22C55E] font-medium font-inter tracking-tight hover:text-white transition-colors duration-200 active:opacity-80 transition-opacity" href="#">Product</a>
+<a class="text-zinc-400 font-medium font-inter tracking-tight hover:text-white transition-colors duration-200 active:opacity-80 transition-opacity" href="#">Docs</a>
+<a class="text-zinc-400 font-medium font-inter tracking-tight hover:text-white transition-colors duration-200 active:opacity-80 transition-opacity" href="#">Manifesto</a>
+<div class="flex items-center gap-4 ml-4">
+<span class="material-symbols-outlined text-zinc-400 hover:text-white cursor-pointer" data-icon="terminal">terminal</span>
+<button class="bg-[#22C55E] text-[#0A0A0B] px-4 py-1.5 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity">GitHub</button>
+</div>
+</div>
+</div>
+</nav>
+<main class="pt-16">
+<!-- HERO SECTION -->
+<section class="max-w-[1440px] mx-auto px-8 py-24 lg:py-32 grid lg:grid-cols-2 gap-16 items-center">
+<div class="space-y-8">
+<h1 class="text-white font-h1 text-5xl lg:text-7xl font-extrabold tracking-tighter leading-none">
+                    Stop shipping code you <span class="text-[#22C55E]">can't explain.</span>
+</h1>
+<p class="text-zinc-400 font-body-lg text-xl max-w-lg leading-relaxed">
+                    Most AI tools remove friction. Socrates AI adds the right friction so you actually understand what you build.
+                </p>
+<div class="flex flex-col sm:flex-row gap-4 pt-4">
+<button class="bg-[#22C55E] text-[#0A0A0B] px-8 py-4 rounded-lg font-bold flex items-center justify-center gap-2 hover:brightness-110 transition-all">
+<span class="material-symbols-outlined" data-icon="download">download</span>
+                        Install CLI
+                    </button>
+<button class="border border-[#27272A] text-white px-8 py-4 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-[#121214] transition-all">
+<span class="material-symbols-outlined" data-icon="play_circle">play_circle</span>
+                        Watch Demo
+                    </button>
+</div>
+<div class="bg-[#121214] border border-[#27272A] p-4 rounded-lg flex items-center justify-between font-mono text-sm max-w-md group">
+<span class="text-[#22C55E]">$ npm install -g @socrates-ai/cli</span>
+<span class="material-symbols-outlined text-zinc-600 group-hover:text-zinc-300 cursor-pointer" data-icon="content_copy">content_copy</span>
+</div>
+</div>
+<div class="relative">
+<div class="bg-[#121214] border border-[#27272A] rounded-xl overflow-hidden terminal-shadow">
+<div class="bg-[#18181B] px-4 py-2 border-b border-[#27272A] flex items-center gap-2">
+<div class="flex gap-1.5">
+<div class="w-3 h-3 rounded-full bg-[#3d4a3d]"></div>
+<div class="w-3 h-3 rounded-full bg-[#3d4a3d]"></div>
+<div class="w-3 h-3 rounded-full bg-[#3d4a3d]"></div>
+</div>
+<div class="mx-auto font-mono text-xs text-zinc-500 uppercase tracking-widest">zsh — socrates</div>
+</div>
+<div class="p-6 font-mono text-sm leading-relaxed min-h-[400px]">
+<div class="flex gap-2">
+<span class="text-[#22C55E]">➜</span>
+<span class="text-white">socrates init project-alpha</span>
+</div>
+<div class="text-zinc-500 mt-2 italic">Analyzing architecture...</div>
+<div class="mt-4 text-[#22C55E]">? Socrates: Before we generate the API, how do you plan to handle state persistence?</div>
+<div class="mt-2 text-zinc-400 pl-4 border-l-2 border-[#27272A]">
+                            1) Redis (In-memory cache)<br/>
+                            2) PostgreSQL (Relational)<br/>
+                            3) I haven't decided yet
+                        </div>
+<div class="mt-4 flex gap-2">
+<span class="text-[#22C55E]">➜</span>
+<span class="text-white">1</span>
+</div>
+<div class="mt-4 text-[#22C55E]">? Socrates: Excellent. Why Redis over a traditional SQL database for this specific microservice?</div>
+<div class="mt-2 flex items-center gap-2">
+<span class="animate-pulse inline-block w-2 h-4 bg-[#22C55E]"></span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- PROBLEM SECTION -->
+<section class="bg-[#050505] py-32 border-y border-[#27272A]">
+<div class="max-w-[1440px] mx-auto px-8">
+<div class="max-w-4xl space-y-24">
+<div class="space-y-6">
+<p class="text-[#22C55E] font-mono text-sm uppercase tracking-[0.3em]">The Crisis of Abstraction</p>
+<h2 class="text-white font-h2 text-5xl lg:text-7xl font-bold tracking-tight">AI can write your code.<br/>But can you explain it?</h2>
+</div>
+<div class="grid md:grid-cols-2 gap-16">
+<div class="space-y-4">
+<h3 class="text-white font-bold text-xl">The "Ghost in the Machine"</h3>
+<p class="text-zinc-400 leading-relaxed">Most developers today cannot debug what AI generates. We are becoming curators of magic boxes rather than architects of systems.</p>
+</div>
+<div class="space-y-4">
+<h3 class="text-white font-bold text-xl">Velocity vs. Understanding</h3>
+<p class="text-zinc-400 leading-relaxed">Shipping 10x faster is useless if you're 10x slower at fixing the inevitable edge cases because you don't understand the logic underneath.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- SOLUTION SECTION -->
+<section class="py-32 max-w-[1440px] mx-auto px-8">
+<div class="text-center mb-16 space-y-4">
+<h2 class="text-white font-h2 text-4xl font-bold">The Socratic Dialogue for Devs</h2>
+<p class="text-zinc-400 max-w-xl mx-auto">Socrates AI interrogates your intent before generating a single line of code.</p>
+</div>
+<div class="max-w-4xl mx-auto bg-[#121214] border border-[#27272A] rounded-xl overflow-hidden">
+<div class="p-8 space-y-8">
+<!-- User Message -->
+<div class="flex gap-4 items-start">
+<div class="w-8 h-8 rounded bg-zinc-800 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-xs" data-icon="person">person</span>
+</div>
+<div class="text-white font-body-lg">Build me a rate-limiting middleware for Express.</div>
+</div>
+<!-- AI Response (Questioning) -->
+<div class="flex gap-4 items-start">
+<div class="w-8 h-8 rounded bg-[#22C55E] flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-xs text-[#0A0A0B]" data-icon="psychology" data-weight="fill">psychology</span>
+</div>
+<div class="space-y-4">
+<p class="text-white leading-relaxed">Understood. But first: How should the system behave when a user exceeds the limit? Should we drop requests silently, or return a 429 with a 'Retry-After' header?</p>
+<div class="flex gap-3">
+<span class="bg-[#18181B] border border-[#27272A] px-3 py-1 rounded text-xs text-zinc-400">429 Header</span>
+<span class="bg-[#18181B] border border-[#27272A] px-3 py-1 rounded text-xs text-zinc-400">Silent Drop</span>
+<span class="bg-[#18181B] border border-[#27272A] px-3 py-1 rounded text-xs text-zinc-400">Queue &amp; Delay</span>
+</div>
+</div>
+</div>
+<!-- User Message 2 -->
+<div class="flex gap-4 items-start">
+<div class="w-8 h-8 rounded bg-zinc-800 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-xs" data-icon="person">person</span>
+</div>
+<div class="text-white font-body-lg">429 with header. We need to be transparent with API consumers.</div>
+</div>
+<!-- AI Code Output -->
+<div class="flex gap-4 items-start">
+<div class="w-8 h-8 rounded bg-[#22C55E] flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-xs text-[#0A0A0B]" data-icon="code">code</span>
+</div>
+<div class="w-full bg-[#050505] border border-[#27272A] rounded-lg overflow-hidden">
+<div class="bg-[#18181B] px-4 py-2 border-b border-[#27272A] flex justify-between items-center">
+<span class="font-mono text-xs text-zinc-500 uppercase tracking-widest">middleware.js</span>
+<span class="material-symbols-outlined text-xs text-zinc-500 hover:text-white cursor-pointer" data-icon="content_copy">content_copy</span>
+</div>
+<pre class="p-4 font-mono text-sm text-zinc-300 overflow-x-auto"><code>const rateLimiter = (req, res, next) =&gt; {
+  const { limit, current } = checkLimit(req.ip);
+  if (current &gt; limit) {
+    res.set('Retry-After', 60);
+    return res.status(429).json({ error: 'Too many requests' });
+  }
+  next();
+};</code></pre>
+</div>
+</div>
+</div>
+<div class="border-t border-[#27272A] p-4 flex gap-4 bg-[#18181B]">
+<input class="bg-transparent border-none focus:ring-0 text-white w-full placeholder:text-zinc-600 font-inter" placeholder="Explain why you chose this implementation..." type="text"/>
+<button class="text-[#22C55E] material-symbols-outlined" data-icon="send">send</button>
+</div>
+</div>
+</section>
+<!-- THREE MODES -->
+<section class="bg-[#0A0A0B] py-32 border-t border-[#27272A]">
+<div class="max-w-[1440px] mx-auto px-8">
+<div class="grid md:grid-cols-3 gap-8">
+<!-- Card 1 -->
+<div class="border border-[#27272A] p-8 rounded-lg hover:border-[#22C55E] transition-colors group">
+<div class="text-[#22C55E] mb-6">
+<span class="material-symbols-outlined text-4xl" data-icon="school">school</span>
+</div>
+<h3 class="text-white font-h2 mb-4">Full Socratic</h3>
+<p class="text-zinc-400 font-body-sm leading-relaxed mb-8">High friction, deep thinking. Socrates will refuse to generate code until you successfully explain the architectural trade-offs of your request.</p>
+<div class="bg-[#121214] border border-[#27272A] rounded px-3 py-1 inline-flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-[#22C55E]"></div>
+<span class="text-[10px] uppercase font-mono text-zinc-500">Maximum Learning</span>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="border border-[#22C55E]/30 bg-[#121214]/30 p-8 rounded-lg border-[#27272A] transition-colors">
+<div class="text-[#22C55E] mb-6">
+<span class="material-symbols-outlined text-4xl" data-icon="balance">balance</span>
+</div>
+<h3 class="text-white font-h2 mb-4">Guided</h3>
+<p class="text-zinc-400 font-body-sm leading-relaxed mb-8">Balanced approach. AI generates code alongside a "Logic Map" that explains the 'Why' behind every function and variable choice.</p>
+<div class="bg-[#22C55E]/10 border border-[#22C55E]/20 rounded px-3 py-1 inline-flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-[#22C55E] animate-pulse"></div>
+<span class="text-[10px] uppercase font-mono text-[#22C55E]">Recommended</span>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="border border-[#27272A] p-8 rounded-lg hover:border-[#22C55E] transition-colors">
+<div class="text-[#22C55E] mb-6">
+<span class="material-symbols-outlined text-4xl" data-icon="bolt">bolt</span>
+</div>
+<h3 class="text-white font-h2 mb-4">Standard</h3>
+<p class="text-zinc-400 font-body-sm leading-relaxed mb-8">Fast but reflective. Code is generated immediately, but you must complete a 15-second logic quiz to unlock the 'Copy to Clipboard' action.</p>
+<div class="bg-[#121214] border border-[#27272A] rounded px-3 py-1 inline-flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-zinc-500"></div>
+<span class="text-[10px] uppercase font-mono text-zinc-500">Efficiency Focus</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- LEARNING TRAIL -->
+<section class="py-32 max-w-[1440px] mx-auto px-8">
+<div class="grid lg:grid-cols-12 gap-16">
+<div class="lg:col-span-4 space-y-6">
+<h2 class="text-white font-h2 text-4xl font-bold leading-tight">The Learning Trail</h2>
+<p class="text-zinc-400 leading-relaxed">Every session generates a live README.md that documents your learning progress, decisions made, and technical debt acknowledged. It's your project's soul.</p>
+<div class="pt-8 space-y-4">
+<div class="flex items-center gap-4 text-sm text-zinc-300">
+<span class="material-symbols-outlined text-[#22C55E]" data-icon="check_circle">check_circle</span>
+                            Proof of Understanding (PoU)
+                        </div>
+<div class="flex items-center gap-4 text-sm text-zinc-300">
+<span class="material-symbols-outlined text-[#22C55E]" data-icon="check_circle">check_circle</span>
+                            Decision Logs
+                        </div>
+<div class="flex items-center gap-4 text-sm text-zinc-300">
+<span class="material-symbols-outlined text-[#22C55E]" data-icon="check_circle">check_circle</span>
+                            Context Awareness
+                        </div>
+</div>
+</div>
+<div class="lg:col-span-8">
+<div class="bg-[#121214] border border-[#27272A] rounded-xl overflow-hidden">
+<div class="bg-[#18181B] px-6 py-3 border-b border-[#27272A] flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-zinc-500 text-sm" data-icon="description">description</span>
+<span class="text-white text-xs font-mono uppercase tracking-widest">Socrates_Learning_Trail.md</span>
+</div>
+<div class="flex gap-1">
+<div class="w-2 h-2 rounded-full bg-[#22C55E]"></div>
+<div class="w-2 h-2 rounded-full bg-[#22C55E]/30"></div>
+<div class="w-2 h-2 rounded-full bg-[#22C55E]/30"></div>
+</div>
+</div>
+<div class="p-8 font-inter text-zinc-400 space-y-6 prose-invert max-h-[500px] overflow-y-auto">
+<h1 class="text-2xl font-bold text-white border-b border-[#27272A] pb-4">Project: Auth-Bridge</h1>
+<p>This document tracks the technical evolution of <code class="bg-[#18181B] px-1 rounded text-[#22C55E]">Auth-Bridge</code>. Decisions made through Socratic dialogue.</p>
+<h2 class="text-xl font-bold text-white mt-8">Decisions &amp; Trade-offs</h2>
+<div class="bg-[#18181B] p-4 border-l-4 border-[#22C55E] rounded">
+<p class="text-sm font-bold text-white mb-2">JWT vs Session Cookies</p>
+<p class="text-sm">Chose JWT because the system needs to be stateless for horizontal scaling. Acknowledged security risk: No easy way to revoke tokens without a blacklist.</p>
+</div>
+<h2 class="text-xl font-bold text-white mt-8">Knowledge Checkpoints</h2>
+<ul class="list-disc pl-6 space-y-2 text-sm">
+<li>Explained the difference between <code class="text-zinc-200">symmetric</code> and <code class="text-zinc-200">asymmetric</code> encryption.</li>
+<li>Mapped the <code class="text-zinc-200">OIDC</code> handshake flow from scratch.</li>
+<li>Identified why <code class="text-zinc-200">bcrypt</code> is preferred over <code class="text-zinc-200">SHA-256</code> for password hashing.</li>
+</ul>
+<h2 class="text-xl font-bold text-white mt-8">Code Reference</h2>
+<div class="bg-[#050505] p-4 rounded-lg font-mono text-xs">
+<span class="text-zinc-600">// Derived from Dialogue #42</span><br/>
+<span class="text-[#22C55E]">export</span> <span class="text-white">const</span> <span class="text-secondary">verifyScope</span> = (token) =&gt; {<br/>
+                                  <span class="text-zinc-500">// Logic for scope verification explained by user in PoU check.</span><br/>
+                                };
+                            </div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- HOW IT WORKS -->
+<section class="bg-[#050505] py-32">
+<div class="max-w-[1440px] mx-auto px-8">
+<div class="text-center mb-20">
+<h2 class="text-white font-h2 text-4xl font-bold">The Socratic Workflow</h2>
+</div>
+<div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
+<div class="space-y-4">
+<div class="w-12 h-12 bg-[#121214] border border-[#27272A] rounded-lg flex items-center justify-center text-[#22C55E] font-bold">1</div>
+<h4 class="text-white font-bold">Ask</h4>
+<p class="text-zinc-500 text-sm">Input your project requirements through the CLI or Web UI.</p>
+</div>
+<div class="space-y-4">
+<div class="w-12 h-12 bg-[#121214] border border-[#27272A] rounded-lg flex items-center justify-center text-[#22C55E] font-bold">2</div>
+<h4 class="text-white font-bold">Think</h4>
+<p class="text-zinc-500 text-sm">Socrates challenges your assumptions with clarifying questions.</p>
+</div>
+<div class="space-y-4">
+<div class="w-12 h-12 bg-[#121214] border border-[#27272A] rounded-lg flex items-center justify-center text-[#22C55E] font-bold">3</div>
+<h4 class="text-white font-bold">Build</h4>
+<p class="text-zinc-500 text-sm">Code is generated once you demonstrate architectural clarity.</p>
+</div>
+<div class="space-y-4">
+<div class="w-12 h-12 bg-[#121214] border border-[#27272A] rounded-lg flex items-center justify-center text-[#22C55E] font-bold">4</div>
+<h4 class="text-white font-bold">Export</h4>
+<p class="text-zinc-500 text-sm">Receive your source code and the Learning Trail documentation.</p>
+</div>
+</div>
+</div>
+</section>
+<!-- GET STARTED -->
+<section class="py-32">
+<div class="max-w-[1440px] mx-auto px-8">
+<div class="bg-[#22C55E] rounded-2xl p-12 lg:p-24 text-center space-y-8 relative overflow-hidden">
+<!-- Subtle pattern background -->
+<div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: radial-gradient(#000 1px, transparent 0); background-size: 24px 24px;"></div>
+<h2 class="text-[#0A0A0B] text-4xl lg:text-6xl font-black tracking-tighter relative z-10">Start building things you actually understand.</h2>
+<div class="max-w-2xl mx-auto space-y-6 relative z-10">
+<div class="bg-[#0A0A0B] p-4 rounded-xl flex items-center justify-between font-mono text-lg text-white">
+<span>$ npm install -g @socrates-ai/cli</span>
+<span class="material-symbols-outlined cursor-pointer hover:text-[#22C55E]" data-icon="content_copy">content_copy</span>
+</div>
+<div class="flex flex-col sm:flex-row gap-4 justify-center">
+<button class="bg-[#0A0A0B] text-white px-8 py-4 rounded-lg font-bold hover:opacity-90 transition-all">Get Started Free</button>
+<button class="bg-transparent border-2 border-[#0A0A0B] text-[#0A0A0B] px-8 py-4 rounded-lg font-bold hover:bg-[#0A0A0B] hover:text-[#22C55E] transition-all">Read the Docs</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-[#0A0A0B] border-t border-[#27272A]">
+<div class="flex flex-col md:flex-row justify-between items-center py-12 px-8 max-w-[1440px] mx-auto gap-4">
+<div class="flex flex-col items-center md:items-start gap-2">
+<div class="text-white font-bold">Socrates AI</div>
+<div class="text-[#22C55E] font-mono text-xs uppercase tracking-widest">Built for the terminal.</div>
+</div>
+<div class="flex flex-wrap justify-center gap-8 text-zinc-500 font-mono text-xs uppercase tracking-widest cursor-pointer">
+<a class="hover:text-[#22C55E] transition-colors">Documentation</a>
+<a class="hover:text-[#22C55E] transition-colors">Changelog</a>
+<a class="hover:text-[#22C55E] transition-colors">Security</a>
+<a class="hover:text-[#22C55E] transition-colors">Privacy</a>
+</div>
+<div class="text-zinc-500 font-mono text-xs text-center md:text-right">
+                © 2024 Socrates AI. Built with ❤️ during the Deep-Learning Hackathon.
+            </div>
+</div>
+</footer>
+</body></html>
