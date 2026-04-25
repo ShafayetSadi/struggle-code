@@ -17,6 +17,8 @@ const TOP_LEVEL_ITEMS: SelectItem[] = [
   { value: "/resume ", label: "/resume", description: "List saved sessions or resume one by id" },
   { value: "/share ", label: "/share", description: "Share a file with the session" },
   { value: "/trail export", label: "/trail export", description: "Export the session trail" },
+  { value: "/exit", label: "/exit", description: "Close the session" },
+  { value: "/quit", label: "/quit", description: "Close the session" },
 ];
 
 const HELP_ITEMS: SelectItem[] = [
@@ -95,7 +97,6 @@ function getAllItems(): SelectItem[] {
     ...LOGIN_ITEMS,
     ...providerItems,
     ...MODE_ITEMS,
-    { value: "/exit", label: "/exit", description: "Close the session" },
   ];
 }
 
@@ -125,12 +126,32 @@ function itemsForContext(context: MenuContext, query: string): SelectItem[] {
       return MODE_ITEMS;
     case "search": {
       const n = query.trimStart().toLowerCase();
-      return getAllItems().filter((item) => {
-        const v = item.value.toLowerCase();
-        const l = item.label.toLowerCase();
-        const d = (item.description ?? "").toLowerCase();
-        return v.startsWith(n) || l.includes(n) || d.includes(n.slice(1));
-      });
+      const term = n.startsWith("/") ? n.slice(1) : n;
+
+      return getAllItems()
+        .map((item, index) => {
+          const v = item.value.toLowerCase();
+          const l = item.label.toLowerCase();
+          const d = (item.description ?? "").toLowerCase();
+
+          let score = 0;
+          if (v === n || l === n) {
+            score = 400;
+          } else if (v.startsWith(n) || l.startsWith(n)) {
+            score = 300;
+          } else if (v.includes(n) || l.includes(n)) {
+            score = 200;
+          }
+
+          if (term.length > 0 && d.includes(term)) {
+            score = Math.max(score, 100);
+          }
+
+          return { item, index, score };
+        })
+        .filter((entry) => entry.score > 0)
+        .sort((a, b) => b.score - a.score || a.item.label.length - b.item.label.length || a.index - b.index)
+        .map((entry) => entry.item);
     }
   }
 }

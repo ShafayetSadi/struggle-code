@@ -43,11 +43,14 @@ describe("cli entry", () => {
     });
     expect(parseSlashCommand("/resume")).toEqual({ kind: "resume" });
     expect(parseSlashCommand("/resume session-123")).toEqual({ kind: "resume", historyId: "session-123" });
+    expect(parseSlashCommand("/exit")).toEqual({ kind: "exit" });
+    expect(parseSlashCommand("/quit")).toEqual({ kind: "exit" });
   });
 
-  it("lists /resume in the root command menu", () => {
+  it("lists /resume and /quit in the root command menu", () => {
     expect(ROOT_MENU_TEXT).toContain("/resume");
     expect(ROOT_MENU_TEXT).toContain("List saved sessions or resume one by id");
+    expect(ROOT_MENU_TEXT).toContain("/exit, /quit");
   });
 
   it("formats the prompt with the active mode", () => {

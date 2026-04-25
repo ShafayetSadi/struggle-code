@@ -21,6 +21,7 @@ Commands:
   /share <path>             Share a file with the active session
   /trail export [path] [--format md|pdf]
                             Export the learning trail
+  /exit, /quit              Close the session
 `.trim();
 
 export const LOGIN_MENU_TEXT = `
