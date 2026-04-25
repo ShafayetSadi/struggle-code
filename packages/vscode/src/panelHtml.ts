@@ -717,7 +717,7 @@ export function getPanelHtml(): string {
 
       function renderInlineMarkdown(line) {
         let html = escapeHtml(line);
-        html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+        html = html.replace(/\`([^\`]+)\`/g, "<code>$1</code>");
         html = html.replace(/\\*\\*([^*]+)\\*\\*/g, "<strong>$1</strong>");
         html = html.replace(/\\*([^*]+)\\*/g, "<em>$1</em>");
         return html;
@@ -738,7 +738,7 @@ export function getPanelHtml(): string {
         }
 
         for (const line of lines) {
-          const fence = line.match(/^```(.*)$/);
+          const fence = line.match(/^\`\`\`(.*)$/);
           if (fence) {
             if (inCode) {
               out.push("</code></pre>");
