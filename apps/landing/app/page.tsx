@@ -350,7 +350,7 @@ export default function Page() {
                   <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-[#27272A] bg-[#121214] text-lg font-bold text-[#22C55E]">
                     {step.n}
                   </div>
-                  <h4 className="font-bold text-white">{step.t}</h4>
+                  <h4 className="text-2xl font-bold text-white">{step.t}</h4>
                   <p className="text-sm text-zinc-500">{step.d}</p>
                 </div>
               ))}
