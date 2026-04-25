@@ -29,6 +29,34 @@ async function createConsoleLoginIO(): Promise<ConsoleLoginIO> {
   };
 }
 
+function parseOAuthErrorFromInput(input: string): string | null {
+  const value = input.trim();
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const url = new URL(value);
+    const error = url.searchParams.get("error");
+    if (!error) {
+      return null;
+    }
+    const description = url.searchParams.get("error_description");
+    return description ? `${error}: ${description}` : error;
+  } catch {
+    if (!value.includes("error=")) {
+      return null;
+    }
+    const params = new URLSearchParams(value);
+    const error = params.get("error");
+    if (!error) {
+      return null;
+    }
+    const description = params.get("error_description");
+    return description ? `${error}: ${description}` : error;
+  }
+}
+
 export async function runProviderLogin(provider: Provider, io?: LoginIO): Promise<void> {
   const loginIO = io ?? (await createConsoleLoginIO());
 
@@ -52,7 +80,12 @@ export async function runProviderLogin(provider: Provider, io?: LoginIO): Promis
   };
 
   const onManualCodeInput = async (): Promise<string> => {
-    return loginIO.prompt("Paste the redirected URL/code and press Enter");
+    const input = await loginIO.prompt("Paste the redirected URL/code and press Enter");
+    const oauthError = parseOAuthErrorFromInput(input);
+    if (oauthError) {
+      throw new Error(`OAuth authorization failed: ${oauthError}`);
+    }
+    return input;
   };
 
   try {

@@ -1,11 +1,21 @@
 import { describe, expect, it } from "vitest";
-
 import { createProgram, formatPrompt, parseSlashCommand } from "../src/index.js";
+import { ROOT_MENU_TEXT } from "../src/repl/commands.js";
 
 describe("cli entry", () => {
   it("loads without throwing and exposes a commander program", () => {
     const program = createProgram();
     expect(program.name()).toBe("struggle");
+  });
+
+  it("exposes --resume on the root command and repl subcommand", () => {
+    const program = createProgram();
+    const rootOptionNames = program.options.map((option) => option.attributeName());
+    const repl = program.commands.find((command) => command.name() === "repl");
+    const replOptionNames = repl?.options.map((option) => option.attributeName()) ?? [];
+
+    expect(rootOptionNames).toContain("resume");
+    expect(replOptionNames).toContain("resume");
   });
 
   it("parses the supported slash commands", () => {
@@ -32,6 +42,12 @@ describe("cli entry", () => {
       format: "pdf",
     });
     expect(parseSlashCommand("/resume")).toEqual({ kind: "resume" });
+    expect(parseSlashCommand("/resume session-123")).toEqual({ kind: "resume", historyId: "session-123" });
+  });
+
+  it("lists /resume in the root command menu", () => {
+    expect(ROOT_MENU_TEXT).toContain("/resume");
+    expect(ROOT_MENU_TEXT).toContain("List saved sessions or resume one by id");
   });
 
   it("formats the prompt with the active mode", () => {

@@ -14,6 +14,7 @@ const TOP_LEVEL_ITEMS: SelectItem[] = [
   { value: "/copy", label: "/copy", description: "Copy the latest generated output" },
   { value: "/clear", label: "/clear", description: "Clear the transcript" },
   { value: "/new", label: "/new", description: "Start a fresh session" },
+  { value: "/resume ", label: "/resume", description: "List saved sessions or resume one by id" },
   { value: "/share ", label: "/share", description: "Share a file with the session" },
   { value: "/trail export", label: "/trail export", description: "Export the session trail" },
 ];

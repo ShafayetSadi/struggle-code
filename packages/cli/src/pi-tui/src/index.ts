@@ -431,7 +431,8 @@ export class SelectList implements Component {
       const labelW = visibleWidth(label);
       const descW = visibleWidth(desc);
       const gap = Math.max(1, safeWidth - labelW - descW);
-      lines.push(label + " ".repeat(gap) + desc);
+      const row = label + " ".repeat(gap) + desc;
+      lines.push(padToWidth(truncateToWidth(row, safeWidth), safeWidth));
     }
 
     if (this.filtered.length > this.visibleCount) {

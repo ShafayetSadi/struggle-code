@@ -37,8 +37,8 @@ export async function startSession(
   return createCodingAgentSession(projectPath, io, providerConfig, initialMessages);
 }
 
+export type { AgentMessage } from "@mariozechner/pi-agent-core";
 export { DEFAULT_CONFIGS, loadConfig, resolveProviderConfig } from "./config.js";
 export { NoopIO } from "./io.js";
 export { createLLMAdapter } from "./llm/adapter.js";
 export * from "./types.js";
-export type { AgentMessage } from "@mariozechner/pi-agent-core";

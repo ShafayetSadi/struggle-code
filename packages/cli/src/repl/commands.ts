@@ -17,7 +17,7 @@ Commands:
   /copy                     Copy the latest generated output
   /clear                    Clear the transcript
   /new                      Start a fresh session
-  /resume                   Resume the last saved session
+  /resume [session-id]      List saved sessions or resume one by id
   /share <path>             Share a file with the active session
   /trail export [path] [--format md|pdf]
                             Export the learning trail
@@ -89,7 +89,7 @@ export function parseSlashCommand(input: string): SlashCommand | undefined {
     case "new":
       return { kind: "new" };
     case "resume":
-      return { kind: "resume" };
+      return args[0] ? { kind: "resume", historyId: args[0] } : { kind: "resume" };
     case "exit":
     case "quit":
       return { kind: "exit" };

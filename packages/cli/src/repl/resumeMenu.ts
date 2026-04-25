@@ -3,11 +3,16 @@ import { renderPanel, SelectList } from "../pi-tui/src/index.js";
 
 import { chalk, P } from "./palette.js";
 
-export class ModelMenu implements Component {
+export class ResumeMenu implements Component {
   private readonly list: SelectList;
 
-  constructor(items: SelectItem[], currentModel: string, onSelect: (item: SelectItem) => void, onCancel: () => void) {
-    this.list = new SelectList(items, 10, {
+  constructor(
+    items: SelectItem[],
+    currentSessionId: string | undefined,
+    onSelect: (item: SelectItem) => void,
+    onCancel: () => void
+  ) {
+    this.list = new SelectList(items, 8, {
       selectedPrefix: (text) => chalk.hex(P.blue)(text),
       selectedText: (text) => chalk.hex(P.textPrimary).bold(text),
       description: (text) => chalk.hex(P.textMuted)(text),
@@ -16,7 +21,9 @@ export class ModelMenu implements Component {
     });
     this.list.onSelect = onSelect;
     this.list.onCancel = onCancel;
-    this.list.selectValue(currentModel);
+    if (currentSessionId) {
+      this.list.selectValue(currentSessionId);
+    }
   }
 
   handleInput(data: string): void {
@@ -29,13 +36,13 @@ export class ModelMenu implements Component {
 
   render(width: number): string[] {
     return renderPanel(
-      "Models",
+      "Resume Session",
       [
-        chalk.hex(P.textMuted)("Use ↑↓ to choose, Enter to apply, Esc to close."),
+        chalk.hex(P.textMuted)("Use ↑↓ to choose a saved session, Enter to connect, Esc to close."),
         "",
-        ...this.list.render(Math.max(40, width - 4)),
+        ...this.list.render(Math.max(56, width - 4)),
       ],
-      Math.max(48, width),
+      Math.max(64, width),
       {
         background: (text) => chalk.bgHex(P.bgPanel)(text),
         title: (text) => chalk.hex(P.textSecondary)(`  ${text}`),
