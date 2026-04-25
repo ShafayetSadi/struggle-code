@@ -1,11 +1,25 @@
 {
   "name": "struggle-ai-vscode",
   "displayName": "Struggle AI",
-  "description": "A Socratic coding mentor that guides you through problems with questions, not answers.",
+  "description": "A Socratic coding mentor that guides you through problems with questions, not answers. Requires @struggle-ai/cli installed globally.",
   "version": "0.1.0",
   "publisher": "struggle-ai",
-  "private": true,
+  "author": "Struggle AI",
+  "license": "MIT",
+  "homepage": "https://github.com/ShafayetSadi/struggle-code#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ShafayetSadi/struggle-code.git",
+    "directory": "packages/vscode"
+  },
+  "bugs": {
+    "url": "https://github.com/ShafayetSadi/struggle-code/issues"
+  },
   "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#111111",
+    "theme": "dark"
+  },
   "categories": [
     "Machine Learning",
     "Education",
@@ -16,7 +30,8 @@
     "coding",
     "mentor",
     "socratic",
-    "learning"
+    "learning",
+    "struggle"
   ],
   "engines": {
     "vscode": "^1.85.0"

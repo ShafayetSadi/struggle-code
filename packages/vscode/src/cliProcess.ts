@@ -241,7 +241,13 @@ export class CliProcess {
 
 // ── Factory ──────────────────────────────────────────────────────────────────
 
-export function spawnCliDaemon(extensionPath: string, log: Log = () => {}): CliProcess {
+const CLI_NOT_FOUND_PATTERNS = /not recognized|not found|No such file|command not found|cannot find/i;
+
+export function spawnCliDaemon(
+  extensionPath: string,
+  log: Log = () => {},
+  onCliNotFound?: () => void
+): CliProcess {
   const devCliPath = resolve(extensionPath, "../cli/dist/index.js");
   const devExists = existsSync(devCliPath);
 
@@ -264,12 +270,26 @@ export function spawnCliDaemon(extensionPath: string, log: Log = () => {}): CliP
     });
   }
 
+  let sawNotFound = false;
+
   if (proc.stderr) {
     const rl = createInterface({ input: proc.stderr, terminal: false });
     rl.on("line", (line) => {
-      if (line.trim()) log(`[daemon stderr] ${line}`);
+      const trimmed = line.trim();
+      if (!trimmed) return;
+      log(`[daemon stderr] ${trimmed}`);
+      if (CLI_NOT_FOUND_PATTERNS.test(trimmed)) {
+        sawNotFound = true;
+      }
     });
   }
+
+  proc.on("exit", (code) => {
+    if (code !== 0 && sawNotFound) {
+      log(`[daemon] CLI not found — triggering onCliNotFound`);
+      onCliNotFound?.();
+    }
+  });
 
   return new CliProcess(proc, log);
 }
