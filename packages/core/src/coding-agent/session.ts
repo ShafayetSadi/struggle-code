@@ -1,4 +1,4 @@
-import { Agent, type AgentEvent } from "@mariozechner/pi-agent-core";
+import { Agent, type AgentEvent, type AgentMessage } from "@mariozechner/pi-agent-core";
 import { getModel, type KnownProvider, type ToolResultMessage } from "@mariozechner/pi-ai";
 
 import { renderTrailMarkdown } from "../artifacts/trail.js";
@@ -125,7 +125,12 @@ function renderToolResultSummary(toolResults: ToolResultMessage[]): string[] {
   });
 }
 
-export async function createCodingAgentSession(projectPath: string, io: IO, config: ProviderConfig): Promise<Session> {
+export async function createCodingAgentSession(
+  projectPath: string,
+  io: IO,
+  config: ProviderConfig,
+  initialMessages?: AgentMessage[]
+): Promise<Session> {
   const state = createInitialState(projectPath);
   const trail: TrailEntry[] = [];
   const adrs: ADR[] = [];
@@ -139,7 +144,7 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
       model: getModel(config.provider as KnownProvider, config.model as never),
       thinkingLevel: getThinkingLevel(state.mode),
       tools: createProjectTools({ projectPath, io }),
-      messages: [],
+      messages: initialMessages ?? [],
     },
     getApiKey: () => resolveProviderApiKey(config),
     sessionId: state.id,
@@ -403,6 +408,9 @@ export async function createCodingAgentSession(projectPath: string, io: IO, conf
 
   return {
     state,
+    getMessages(): AgentMessage[] {
+      return [...agent.state.messages];
+    },
     sendMessage(message: string) {
       touchState(state);
       pushTrail("user_turn", { message });

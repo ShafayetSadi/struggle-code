@@ -45,13 +45,14 @@ vi.mock("@mariozechner/pi-agent-core", () => {
         thinkingLevel?: string;
         tools?: unknown[];
         model?: unknown;
+        messages?: unknown[];
       };
     }) {
       this.state = {
         systemPrompt: options?.initialState?.systemPrompt ?? "",
         thinkingLevel: options?.initialState?.thinkingLevel ?? "medium",
         tools: options?.initialState?.tools ?? [],
-        messages: [],
+        messages: (options?.initialState?.messages as string[]) ?? [],
         model: options?.initialState?.model,
       };
       MockAgent.instances.push(this);
@@ -629,6 +630,19 @@ describe("coding agent session", () => {
     );
     expect(MockAgentClass.instances[0]?.messages).toHaveLength(0);
     expect(session.state.modePhase).toBe("awaiting-validation");
+  });
+
+  it("getMessages returns an empty array before any exchange", async () => {
+    const io = new MemoryIO();
+    const session = await startSession("/tmp/project", io);
+    expect(session.getMessages()).toEqual([]);
+  });
+
+  it("restores initialMessages into the agent when provided", async () => {
+    const initial = [{ role: "user", content: [{ type: "text", text: "hi" }], timestamp: 0 }];
+    const io = new MemoryIO();
+    const session = await startSession("/tmp/project", io, undefined, initial as never);
+    expect(session.getMessages()).toEqual(initial);
   });
 
   it("exports a markdown trail and warns when pdf is requested", async () => {

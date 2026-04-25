@@ -1,3 +1,4 @@
+import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import { createCodingAgentSession } from "./coding-agent/session.js";
 import { resolveProviderConfig } from "./config.js";
 import { classifyIntentWithDeps } from "./gate/classifier.js";
@@ -15,6 +16,7 @@ export interface Session {
   exportTrail(outputPath: string, format: "md" | "pdf"): Promise<void>;
   getTrail(): TrailEntry[];
   getADRs(): ADR[];
+  getMessages(): AgentMessage[];
 }
 
 export async function classifyIntent(message: string): Promise<Intent> {
@@ -25,12 +27,18 @@ export async function classifyIntent(message: string): Promise<Intent> {
   });
 }
 
-export async function startSession(projectPath: string, io: IO, config?: ProviderConfig): Promise<Session> {
+export async function startSession(
+  projectPath: string,
+  io: IO,
+  config?: ProviderConfig,
+  initialMessages?: AgentMessage[]
+): Promise<Session> {
   const providerConfig = config ?? resolveProviderConfig();
-  return createCodingAgentSession(projectPath, io, providerConfig);
+  return createCodingAgentSession(projectPath, io, providerConfig, initialMessages);
 }
 
 export { DEFAULT_CONFIGS, loadConfig, resolveProviderConfig } from "./config.js";
 export { NoopIO } from "./io.js";
 export { createLLMAdapter } from "./llm/adapter.js";
 export * from "./types.js";
+export type { AgentMessage } from "@mariozechner/pi-agent-core";
