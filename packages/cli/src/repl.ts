@@ -36,7 +36,9 @@ import {
   syncHintState,
 } from "./repl/commands.js";
 import { chalk, formatChunk, formatPrompt, P } from "./repl/formatting.js";
+import { HelpMenu } from "./repl/helpMenu.js";
 import { createTuiIO } from "./repl/io.js";
+import { ModeMenu } from "./repl/modeMenu.js";
 import { LoginOverlay } from "./repl/loginOverlay.js";
 import { ModelMenu } from "./repl/modelMenu.js";
 import { ResumeMenu } from "./repl/resumeMenu.js";
@@ -617,7 +619,67 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
     resolveExit?.();
   };
 
+  let helpMenuOpen = false;
+  let modeMenuOpen = false;
   let modelMenuOpen = false;
+
+  const openHelpMenu = () => {
+    if (helpMenuOpen) return;
+    helpMenuOpen = true;
+
+    const overlay = tui.showOverlay(
+      new HelpMenu(
+        (item) => {
+          overlay.hide();
+          helpMenuOpen = false;
+          tui.setFocus(screen);
+          void submitValue(item.value);
+        },
+        () => {
+          overlay.hide();
+          helpMenuOpen = false;
+          tui.setFocus(screen);
+          tui.requestRender();
+        }
+      ),
+      {
+        width: "100%",
+        minWidth: 50,
+        maxHeight: 11,
+        anchor: "bottom-center",
+      }
+    );
+  };
+
+  const openModeMenu = () => {
+    if (modeMenuOpen) return;
+    modeMenuOpen = true;
+
+    const overlay = tui.showOverlay(
+      new ModeMenu(
+        session.state.mode,
+        (item) => {
+          overlay.hide();
+          modeMenuOpen = false;
+          tui.setFocus(screen);
+          void submitValue(`/mode ${item.value}`);
+        },
+        () => {
+          overlay.hide();
+          modeMenuOpen = false;
+          tui.setFocus(screen);
+          tui.requestRender();
+        }
+      ),
+      {
+        width: "100%",
+        minWidth: 50,
+        maxHeight: 10,
+        anchor: "bottom-center",
+      }
+    );
+  };
+
   const openModelMenu = () => {
     if (modelMenuOpen) return;
     modelMenuOpen = true;
@@ -721,8 +783,7 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
           return;
         }
         if (command.kind === "help") {
-          screen.setInputValue("/help ");
-          tui.requestRender();
+          openHelpMenu();
           return;
         }
         if (command.kind === "login" && !("provider" in command && command.provider)) {
@@ -736,8 +797,7 @@ export async function runRepl(options: RunReplOptions = {}): Promise<void> {
           return;
         }
         if (command.kind === "mode-menu") {
-          screen.setInputValue("/mode ");
-          tui.requestRender();
+          openModeMenu();
           return;
         }
         if (command.kind === "model" && (!("model" in command) || !command.model)) {
