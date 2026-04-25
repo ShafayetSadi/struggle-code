@@ -18,6 +18,10 @@ import { LearningTrailWindow } from "../components/learning-trail-window";
 import { SocratesLogo } from "../components/socrates-logo";
 
 const CLI = "npm install -g @struggle-ai/cli";
+const GITHUB_URL = "https://github.com/ShafayetSadi/struggle-code";
+const NPM_URL = "https://www.npmjs.com/package/@struggle-ai/cli";
+const VSCODE_URL = "https://marketplace.visualstudio.com/items?itemName=TonmayHossainJifat.struggle-ai-vscode";
+const DOCS_URL = "https://github.com/ShafayetSadi/struggle-code/tree/main/docs";
 
 const rateLimiterSnippet = `const rateLimiter = (req, res, next) => {
   const { limit, current } = checkLimit(req.ip);
@@ -44,7 +48,12 @@ export default function Page() {
             >
               Product
             </a>
-            <a className="font-medium tracking-tight text-zinc-400 transition-colors hover:text-white" href="/#docs">
+            <a
+              className="font-medium tracking-tight text-zinc-400 transition-colors hover:text-white"
+              href={DOCS_URL}
+              target="_blank"
+              rel="noreferrer"
+            >
               Docs
             </a>
             <a
@@ -53,17 +62,35 @@ export default function Page() {
             >
               Manifesto
             </a>
-            <div className="ml-4 flex items-center gap-4">
+            <div className="ml-4 flex items-center gap-3">
               <Terminal
                 className="h-5 w-5 cursor-pointer text-zinc-400 transition-colors hover:text-white"
                 aria-hidden
               />
-              <button
-                type="button"
+              <a
+                className="rounded-lg border border-[#27272A] px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-[#121214]"
+                href={NPM_URL}
+                target="_blank"
+                rel="noreferrer"
+              >
+                NPM
+              </a>
+              <a
+                className="rounded-lg border border-[#27272A] px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-[#121214]"
+                href={VSCODE_URL}
+                target="_blank"
+                rel="noreferrer"
+              >
+                VS Code
+              </a>
+              <a
                 className="rounded-lg bg-[#22C55E] px-4 py-1.5 text-sm font-semibold text-[#0A0A0B] transition-opacity hover:opacity-90"
+                href={GITHUB_URL}
+                target="_blank"
+                rel="noreferrer"
               >
                 GitHub
-              </button>
+              </a>
             </div>
           </div>
         </div>
@@ -87,20 +114,24 @@ export default function Page() {
               </p>
             </div>
             <div className="flex flex-col gap-4 pt-4 sm:flex-row">
-              <button
-                type="button"
+              <a
                 className="flex items-center justify-center gap-2 rounded-lg bg-[#22C55E] px-8 py-4 font-bold text-[#0A0A0B] transition-all hover:brightness-110"
+                href={NPM_URL}
+                target="_blank"
+                rel="noreferrer"
               >
                 <Download className="h-5 w-5" aria-hidden />
                 Install CLI
-              </button>
-              <button
-                type="button"
+              </a>
+              <a
                 className="flex items-center justify-center gap-2 rounded-lg border border-[#27272A] px-8 py-4 font-bold text-white transition-all hover:bg-[#121214]"
+                href={VSCODE_URL}
+                target="_blank"
+                rel="noreferrer"
               >
                 <PlayCircle className="h-5 w-5" aria-hidden />
-                Watch Demo
-              </button>
+                VS Code Extension
+              </a>
             </div>
             <div className="group flex max-w-md items-center justify-between rounded-lg border border-[#27272A] bg-[#121214] p-4 font-mono text-sm">
               <InlineCopyRow command={CLI} />
@@ -465,18 +496,22 @@ export default function Page() {
                     <InlineCopyRow command={CLI} layout="icon" />
                   </div>
                   <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-                    <button
-                      type="button"
+                    <a
                       className="rounded-xl bg-[#22C55E] px-6 py-4 font-bold text-[#0A0A0B] transition-transform hover:-translate-y-0.5 hover:brightness-105"
+                      href={NPM_URL}
+                      target="_blank"
+                      rel="noreferrer"
                     >
-                      Get Started Free
-                    </button>
-                    <button
-                      type="button"
+                      Install CLI
+                    </a>
+                    <a
                       className="rounded-xl border border-white/10 bg-white/4 px-6 py-4 font-bold text-white transition-colors hover:bg-white/8"
+                      href={DOCS_URL}
+                      target="_blank"
+                      rel="noreferrer"
                     >
                       Read the Docs
-                    </button>
+                    </a>
                   </div>
                   <p className="mt-4 text-sm leading-relaxed text-zinc-400">
                     Use AI as a mentor, not a vending machine. Ship the code and the reasoning behind it.
@@ -498,17 +533,17 @@ export default function Page() {
             <div className="font-mono text-xs uppercase tracking-widest text-[#22C55E]">Built for the terminal.</div>
           </div>
           <div className="flex flex-wrap justify-center gap-8 font-mono text-xs uppercase tracking-widest text-zinc-500">
-            <a className="cursor-pointer transition-colors hover:text-[#22C55E]" href="/documentation">
+            <a className="cursor-pointer transition-colors hover:text-[#22C55E]" href={DOCS_URL} target="_blank" rel="noreferrer">
               Documentation
             </a>
-            <a className="cursor-pointer transition-colors hover:text-[#22C55E]" href="/changelog">
-              Changelog
+            <a className="cursor-pointer transition-colors hover:text-[#22C55E]" href={GITHUB_URL} target="_blank" rel="noreferrer">
+              GitHub
             </a>
-            <a className="cursor-pointer transition-colors hover:text-[#22C55E]" href="/security">
-              Security
+            <a className="cursor-pointer transition-colors hover:text-[#22C55E]" href={NPM_URL} target="_blank" rel="noreferrer">
+              NPM
             </a>
-            <a className="cursor-pointer transition-colors hover:text-[#22C55E]" href="/privacy">
-              Privacy
+            <a className="cursor-pointer transition-colors hover:text-[#22C55E]" href={VSCODE_URL} target="_blank" rel="noreferrer">
+              VS Code
             </a>
           </div>
           <div className="text-center font-mono text-xs text-zinc-500 md:text-right">
