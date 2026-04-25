@@ -5,6 +5,7 @@ import { InvalidArgumentError } from "commander";
 import { AUTH_PATH, OAUTH_PROVIDERS, saveOAuthCredentials, saveProviderAuth } from "./configStore.js";
 import { copyToClipboard } from "./repl/clipboard.js";
 import type { LoginIO } from "./repl/loginOverlay.js";
+import { formatTerminalLink, supportsOsc8Hyperlinks } from "./repl/terminalLinks.js";
 
 interface ConsoleLoginIO extends LoginIO {
   close(): void;
@@ -23,10 +24,42 @@ async function createConsoleLoginIO(): Promise<ConsoleLoginIO> {
     writeLine: (message: string) => {
       process.stdout.write(`${message}\n`);
     },
-    writeLink: (_label: string, url: string) => {
-      process.stdout.write(`${url}\n`);
+    writeLink: (label: string, url: string) => {
+      process.stdout.write(`${label}\n`);
+      process.stdout.write(`${formatTerminalLink(url, "Open authentication URL")}\n`);
+      if (!supportsOsc8Hyperlinks()) {
+        process.stdout.write(`${url}\n`);
+      }
     },
   };
+}
+
+function parseOAuthErrorFromInput(input: string): string | null {
+  const value = input.trim();
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const url = new URL(value);
+    const error = url.searchParams.get("error");
+    if (!error) {
+      return null;
+    }
+    const description = url.searchParams.get("error_description");
+    return description ? `${error}: ${description}` : error;
+  } catch {
+    if (!value.includes("error=")) {
+      return null;
+    }
+    const params = new URLSearchParams(value);
+    const error = params.get("error");
+    if (!error) {
+      return null;
+    }
+    const description = params.get("error_description");
+    return description ? `${error}: ${description}` : error;
+  }
 }
 
 export async function runProviderLogin(provider: Provider, io?: LoginIO): Promise<void> {
@@ -52,7 +85,12 @@ export async function runProviderLogin(provider: Provider, io?: LoginIO): Promis
   };
 
   const onManualCodeInput = async (): Promise<string> => {
-    return loginIO.prompt("Paste the redirected URL/code and press Enter");
+    const input = await loginIO.prompt("Paste the redirected URL/code and press Enter");
+    const oauthError = parseOAuthErrorFromInput(input);
+    if (oauthError) {
+      throw new Error(`OAuth authorization failed: ${oauthError}`);
+    }
+    return input;
   };
 
   try {

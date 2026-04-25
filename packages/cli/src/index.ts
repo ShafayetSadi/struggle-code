@@ -62,12 +62,14 @@ export function createProgram(): Command {
     .option("--project <path>", "Project path for the interactive session", process.cwd())
     .option("--provider <provider>", "Override provider for this run")
     .option("--model <model>", "Override model for this run")
-    .action(async (options: { model?: string; project: string; provider?: string }) => {
+    .option("--resume", "Resume the last chat session for this project")
+    .action(async (options: { model?: string; project: string; provider?: string; resume?: boolean }) => {
       const configValue = await ensureReadyConfig(options);
       await runRepl({
         projectPath: options.project,
         io: cliIO,
         config: configValue,
+        resume: options.resume ?? false,
       });
     });
 
@@ -154,12 +156,14 @@ export function createProgram(): Command {
     .option("--project <path>", "Project path for the interactive session", process.cwd())
     .option("--provider <provider>", "Override provider for this run")
     .option("--model <model>", "Override model for this run")
-    .action(async (options: { model?: string; project: string; provider?: string }) => {
+    .option("--resume", "Resume the last chat session for this project")
+    .action(async (options: { model?: string; project: string; provider?: string; resume?: boolean }) => {
       const configValue = await ensureReadyConfig(options);
       await runRepl({
         projectPath: options.project,
         io: cliIO,
         config: configValue,
+        resume: options.resume ?? false,
       });
     });
 

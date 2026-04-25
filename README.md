@@ -20,3 +20,5 @@ npm run build
 
 Master plan: [docs/implementation-plan.md](docs/implementation-plan.md)
 
+Release workflow: [docs/release-guide.md](docs/release-guide.md)
+
