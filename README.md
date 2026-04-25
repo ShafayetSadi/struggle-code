@@ -181,14 +181,14 @@ Struggle AI is built around a **shared-core-first** model. All product logic liv
 
 ```mermaid
 flowchart LR
-  User --> CLI[CLI App]
-  User --> VSCode[VS Code Extension]
-  CLI --> Core[@struggle-ai/core]
+  User --> CLI["CLI App"]
+  User --> VSCode["VS Code Extension"]
+  CLI --> Core["@struggle-ai/core"]
   VSCode --> Core
-  Core --> Modes[Mode + session orchestration]
-  Modes --> LLM[LLM provider adapters]
-  Core --> IO[IO abstraction — files, streaming, notifications]
-  Landing[Landing App] -. independent .- Core
+  Core --> Modes["Mode + session orchestration"]
+  Modes --> LLM["LLM provider adapters"]
+  Core --> IO["IO abstraction: files, streaming, notifications"]
+  Landing["Landing App"] -. "independent" .-> Core
 ```
 
 *Figure 2. High-level architecture: CLI and VS Code share the same core runtime, while the landing page remains a separate marketing surface.*
